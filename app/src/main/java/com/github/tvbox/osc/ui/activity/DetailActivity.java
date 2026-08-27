@@ -12,6 +12,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import androidx.core.content.ContextCompat;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
@@ -142,7 +143,7 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
         initView();
         initViewModel();
         initData();
-        registerReceiver(mBatteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        ContextCompat.registerReceiver(this, mBatteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED);
         ImmersionBar.with(this)
                 .statusBarColor(R.color.black)
                 .navigationBarColor(R.color.white)
@@ -290,7 +291,7 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
                     }
                 }
             };
-            registerReceiver(mHomeKeyReceiver, new IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS));
+            ContextCompat.registerReceiver(this, mHomeKeyReceiver, new IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS), ContextCompat.RECEIVER_NOT_EXPORTED);
         }
     }
 
@@ -942,7 +943,7 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
                     }
                 }
             };
-            registerReceiver(mRemoteActionReceiver, new IntentFilter(IntentKey.BROADCAST_ACTION));
+            ContextCompat.registerReceiver(this, mRemoteActionReceiver, new IntentFilter(IntentKey.BROADCAST_ACTION), ContextCompat.RECEIVER_NOT_EXPORTED);
         } else {
             if (mRemoteActionReceiver != null) {
                 unregisterReceiver(mRemoteActionReceiver);

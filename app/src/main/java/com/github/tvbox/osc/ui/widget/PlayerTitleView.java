@@ -8,6 +8,7 @@ import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.util.AttributeSet;
+import androidx.core.content.ContextCompat;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.animation.Animation;
@@ -97,7 +98,7 @@ public class PlayerTitleView extends FrameLayout implements IControlComponent {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         if (!mIsRegister) {
-            getContext().registerReceiver(mBatteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            ContextCompat.registerReceiver(getContext(), mBatteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED);
             mIsRegister = true;
         }
     }
