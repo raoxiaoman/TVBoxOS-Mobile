@@ -467,7 +467,8 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
                     vodInfo.sourceKey = mVideo.sourceKey;
 
                     mBinding.tvName.setText(TextUtils.isEmpty(mVideo.name) ? "暂无信息" : mVideo.name);
-                    String srcName = ApiConfig.get().getSource(mVideo.sourceKey).getName();
+                    SourceBean source = ApiConfig.get().getSource(mVideo.sourceKey);
+                    String srcName = source == null ? null : source.getName();
                     mBinding.tvSite.setText("来源：" + (TextUtils.isEmpty(srcName) ? "未知" : srcName));
 
                     if (vodInfo.seriesMap != null && vodInfo.seriesMap.size() > 0) {//线路
@@ -546,17 +547,22 @@ public class DetailActivity extends BaseVbActivity<ActivityDetailBinding> {
     }
 
     private void loadDetail(String vid, String key) {
-        if (vid != null) {
-            vodId = vid;
-            sourceKey = key;
-            showLoading();
-            sourceViewModel.getDetail(sourceKey, vodId);
-            boolean isVodCollect = RoomDataManger.isVodCollect(sourceKey, vodId);
-            if (isVodCollect) {
-                mBinding.tvCollect.setText("取消收藏");
-            } else {
-                mBinding.tvCollect.setText("加入收藏");
-            }
+        if (TextUtils.isEmpty(vid)) return;
+        if (ApiConfig.get().getSource(key) == null) {
+            showEmpty();
+            mBinding.previewPlayer.setVisibility(View.GONE);
+            ToastUtils.showShort("当前内容源已失效，请重新选择");
+            return;
+        }
+        vodId = vid;
+        sourceKey = key;
+        showLoading();
+        sourceViewModel.getDetail(sourceKey, vodId);
+        boolean isVodCollect = RoomDataManger.isVodCollect(sourceKey, vodId);
+        if (isVodCollect) {
+            mBinding.tvCollect.setText("取消收藏");
+        } else {
+            mBinding.tvCollect.setText("加入收藏");
         }
     }
 
