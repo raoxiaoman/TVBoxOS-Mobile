@@ -8,6 +8,7 @@ import android.util.Base64;
 import com.github.catvod.crawler.JarLoader;
 import com.github.catvod.crawler.JsLoader;
 import com.github.catvod.crawler.Spider;
+import com.github.catvod.utils.DynamicCode;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.IJKCode;
@@ -248,12 +249,15 @@ public class ApiConfig {
 
         if (!md5.isEmpty() || useCache) {
             if (cache.exists() && (useCache || MD5.getFileMd5(cache).equalsIgnoreCase(md5))) {
-                if (jarLoader.load(cache.getAbsolutePath())) {
-                    callback.success();
-                } else {
-                    callback.error("");
+                if (DynamicCode.ensureReadOnly(cache)) {
+                    if (jarLoader.load(cache.getAbsolutePath())) {
+                        callback.success();
+                    } else {
+                        callback.error("");
+                    }
+                    return;
                 }
-                return;
+                cache.delete();
             }
         }
 
@@ -269,9 +273,7 @@ public class ApiConfig {
                 File cacheDir = cache.getParentFile();
                 if (!cacheDir.exists())
                     cacheDir.mkdirs();
-                if (cache.exists())
-                    cache.delete();
-                FileOutputStream fos = new FileOutputStream(cache);
+                FileOutputStream fos = DynamicCode.openReadOnlyOutput(cache);
                 if(isJarInImg) {
                     String respData = response.body().string();
                     byte[] imgJar = getImgJar(respData);

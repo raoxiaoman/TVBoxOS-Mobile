@@ -1,6 +1,7 @@
 package com.github.catvod.crawler;
 
 
+import com.github.catvod.utils.DynamicCode;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.util.LOG;
 import com.github.tvbox.osc.util.MD5;
@@ -8,7 +9,6 @@ import com.github.tvbox.osc.util.js.JsSpider;
 import com.lzy.okgo.OkGo;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Map;
@@ -76,14 +76,17 @@ public class JsLoader {
         File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + key + ".jar");
         if (!md5.isEmpty()) {
             if (cache.exists() && MD5.getFileMd5(cache).equalsIgnoreCase(md5)) {
-                loadClassLoader(cache.getAbsolutePath(), key);
-                return classs.get(key);
+                if (DynamicCode.ensureReadOnly(cache)) {
+                    loadClassLoader(cache.getAbsolutePath(), key);
+                    return classs.get(key);
+                }
+                cache.delete();
             }
         }
         try {
             Response response = OkGo.<File>get(jar).execute();
             InputStream is = response.body().byteStream();
-            OutputStream os = new FileOutputStream(cache);
+            OutputStream os = DynamicCode.openReadOnlyOutput(cache);
             try {
                 byte[] buffer = new byte[2048];
                 int length;

@@ -1,7 +1,9 @@
 package com.github.catvod.crawler;
 
 import android.content.Context;
+import android.os.Build;
 
+import com.github.catvod.utils.DynamicCode;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.util.MD5;
 import com.lzy.okgo.OkGo;
@@ -9,7 +11,6 @@ import com.lzy.okgo.OkGo;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
@@ -17,6 +18,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.zip.ZipFile;
 
 import dalvik.system.DexClassLoader;
 import okhttp3.Response;
@@ -46,6 +48,7 @@ public class JarLoader {
             File cacheDir = new File(App.getInstance().getCacheDir().getAbsolutePath() + "/catvod_csp");
             if (!cacheDir.exists())
                 cacheDir.mkdirs();
+            if (usesUnsupportedGuard(jar)) return false;
             DexClassLoader classLoader = new DexClassLoader(jar, cacheDir.getAbsolutePath(), null, App.getInstance().getClassLoader());
             // make force wait here, some device async dex load
             int count = 0;
@@ -82,20 +85,32 @@ public class JarLoader {
         return success;
     }
 
+    private boolean usesUnsupportedGuard(String jar) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false;
+        try (ZipFile zip = new ZipFile(jar)) {
+            return zip.getEntry("assets/ftyshinidie.guard") != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     private DexClassLoader loadJarInternal(String jar, String md5, String key) {
         if (classLoaders.contains(key))
             return classLoaders.get(key);
         File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + key + ".jar");
         if (!md5.isEmpty()) {
             if (cache.exists() && MD5.getFileMd5(cache).equalsIgnoreCase(md5)) {
-                loadClassLoader(cache.getAbsolutePath(), key);
-                return classLoaders.get(key);
+                if (DynamicCode.ensureReadOnly(cache)) {
+                    loadClassLoader(cache.getAbsolutePath(), key);
+                    return classLoaders.get(key);
+                }
+                cache.delete();
             }
         }
         try {
             Response response = OkGo.<File>get(jar).execute();
             InputStream is = response.body().byteStream();
-            OutputStream os = new FileOutputStream(cache);
+            OutputStream os = DynamicCode.openReadOnlyOutput(cache);
             try {
                 byte[] buffer = new byte[2048];
                 int length;
