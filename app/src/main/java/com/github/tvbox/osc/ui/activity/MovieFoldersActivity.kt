@@ -10,8 +10,6 @@ import com.github.tvbox.osc.bean.VideoInfo
 import com.github.tvbox.osc.databinding.ActivityMovieFoldersBinding
 import com.github.tvbox.osc.ui.adapter.FolderAdapter
 import com.github.tvbox.osc.util.Utils
-import java.util.function.Function
-import java.util.stream.Collectors
 
 class MovieFoldersActivity : BaseVbActivity<ActivityMovieFoldersBinding>() {
 
@@ -38,11 +36,9 @@ class MovieFoldersActivity : BaseVbActivity<ActivityMovieFoldersBinding>() {
      * 按文件夹名字分组视频
      */
     private fun groupVideos() {
-        val videoList = Utils.getVideoList()
-        val videoMap = videoList.stream()
-            .collect(
-                Collectors.groupingBy { obj: VideoInfo -> obj.bucketDisplayName }
-            )
+        val videoMap = Utils.getVideoList().groupBy {
+            it.bucketDisplayName?.takeIf(String::isNotBlank) ?: "其他视频"
+        }
         val videoFolders: MutableList<VideoFolder> = ArrayList()
         videoMap.forEach { (key: String?, value: List<VideoInfo>?) ->
             val videoFolder = VideoFolder(key, value)
