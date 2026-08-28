@@ -35,7 +35,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android API 34
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        run: sdkmanager "platforms;android-34" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -46,6 +46,13 @@ jobs:
           mkdir -p build
           set -o pipefail
           ./gradlew :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee build/gradle-build.log
+
+      - name: Verify 16 KB page-size compatibility
+        run: |
+          apk=$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)
+          test -n "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$apk"
+          python3 scripts/verify_16k_elf.py "$apk"
 
       - name: Report Gradle failure
         if: failure()
@@ -113,7 +120,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android API 34
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        run: sdkmanager "platforms;android-34" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -147,6 +154,13 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Verify 16 KB page-size compatibility
+        run: |
+          apk=$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)
+          test -n "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$apk"
+          python3 scripts/verify_16k_elf.py "$apk"
 
       - name: Create update manifest
         env:

@@ -1,0 +1,47 @@
+TVBox QuickJS Spider Library Replacements — provenance
+
+Generated files:
+  crypto-js.js: ESM adapter around official crypto-js 4.2.0 all-in-one UMD source.
+  cheerio.min.js: standalone ESM browser bundle of official Cheerio 1.2.0.
+
+Runtime target:
+  HarlonWang quickjs-wrapper 3.2.3 embeds QuickJS 2024-02-14 (verified from the AAR native-library string).
+  The wrapper has only Android ABI libraries, so its QuickJS runtime cannot execute on this macOS host.
+
+Pinned upstream sources:
+  crypto-js: https://github.com/brix/crypto-js/archive/refs/tags/4.2.0.tar.gz
+    annotated tag object: d104e1ffaa78a437bbe53b2eafedeb68b5144cc7
+    tag commit:            808f499ec789fcd68416328a40b8735a5c962116
+    archive SHA-256:        6e9998d0acfa8cf6cf6a0b1923cf38cebe50a54c869ca14fe60ca906a7221d4f
+    license: MIT; text in LICENSE.crypto-js-MIT.txt
+  cheerio: https://github.com/cheeriojs/cheerio/archive/refs/tags/v1.2.0.tar.gz
+    annotated tag object: 1f9877b6065847d24b76c51f00ff45be52ba0c00
+    tag commit:            e3c7aaf9ed64fe3cb9a181e58a41c0fdd6dbfbfc
+    archive SHA-256:        206433b1fe4fbf96fcbd57945ccf6a11608dab6a59e1825a16f3b93a94a3f7fc
+    license: MIT; text in LICENSE.cheerio-MIT.txt
+
+Built bundle dependency notices (only modules present in the Cheerio esbuild metafile):
+  boolbase@1.0.0: ISC
+  cheerio@1.2.0: MIT
+  cheerio-select@2.1.0: BSD-2-Clause
+  css-select@5.2.2: BSD-2-Clause
+  css-what@6.2.2: BSD-2-Clause
+  dom-serializer@2.0.0: MIT
+  domelementtype@2.3.0: BSD-2-Clause
+  domhandler@5.0.3: BSD-2-Clause
+  domutils@3.2.2: BSD-2-Clause
+  entities@6.0.1: BSD-2-Clause
+  htmlparser2@10.1.0: MIT
+  nth-check@2.1.1: BSD-2-Clause
+  parse5@7.3.0: MIT
+  parse5-htmlparser2-tree-adapter@7.1.0: MIT
+
+Output SHA-256:
+  crypto-js.js:    94b7fe24077be05a284d4b88f3316dd4df6577e992081213073914297d829a90
+  cheerio.min.js: 2ceb16c1c49576c416fdefd78e153703d1c0d3dc00b07bd362e9cc5ac09c3a4c
+
+Build:
+  Cheerio source was built with the release package lock, tshy, then esbuild (format=esm, platform=browser, target=es2020, minify, legal-comments=inline).
+  Both output files are standalone: no static imports, dynamic imports, require() calls, window references, or document references.
+  crypto-js.js intentionally exposes only optional globalThis.crypto; no Node require, window, self, global, or DOM is used.
+  Both assign their default object to globalThis (CryptoJS / cheerio) for legacy callers, while exporting ESM APIs.

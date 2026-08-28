@@ -6,14 +6,11 @@ import com.github.catvod.crawler.Spider;
 import com.github.tvbox.osc.util.FileUtils;
 import com.github.tvbox.osc.util.LOG;
 import com.github.tvbox.osc.util.MD5;
-import com.whl.quickjs.wrapper.Function;
 import com.whl.quickjs.wrapper.JSArray;
 import com.whl.quickjs.wrapper.JSCallFunction;
 import com.whl.quickjs.wrapper.JSFunction;
 import com.whl.quickjs.wrapper.JSObject;
-import com.whl.quickjs.wrapper.JSUtils;
 import com.whl.quickjs.wrapper.QuickJSContext;
-import com.whl.quickjs.wrapper.UriUtil;
 
 import org.json.JSONArray;
 
@@ -73,16 +70,18 @@ public class SpiderJS extends Spider {
 
                 @Override
                 public String moduleNormalizeName(String moduleBaseName, String moduleName) {
-                    return UriUtil.resolve(moduleBaseName, moduleName);
+                    return Json.resolveModule(moduleBaseName, moduleName);
                 }
             });
 
             initConsole();
-            runtime.getGlobalObject().bind(new Global(executor));
+            Global global = new Global(executor);
+            global.setJSContext(runtime);
+            Json.bind(runtime.getGlobalObject(), global);
 
             if(cls != null){
                 Class<?>[] classes = cls.getDeclaredClasses();
-                JSObject apiObj = runtime.createJSObject();
+                JSObject apiObj = runtime.createNewJSObject();
 
                 LOG.e("cls","" + classes.length);
                 for (Class<?> classe : classes) {
@@ -95,12 +94,12 @@ public class SpiderJS extends Spider {
                     if (javaObj == null) {
                         throw new NullPointerException("The JavaObj cannot be null. An error occurred in newInstance!");
                     }
-                    JSObject claObj = runtime.createJSObject();
+                    JSObject claObj = runtime.createNewJSObject();
                     Method[] methods = classe.getDeclaredMethods();
                     for (Method method : methods) {
-                        if (method.isAnnotationPresent(Function.class)) {
+                        if (method.getDeclaringClass() != Object.class && !method.isSynthetic()) {
                             Object finalJavaObj = javaObj;
-                            claObj.set(method.getName(), new JSCallFunction() {
+                            claObj.setProperty(method.getName(), new JSCallFunction() {
                                 @Override
                                 public Object call(Object... objects) {
                                     try {
@@ -112,10 +111,10 @@ public class SpiderJS extends Spider {
                             });
                         }
                     }
-                    apiObj.set(classe.getSimpleName(), claObj);
+                    apiObj.setProperty(classe.getSimpleName(), claObj);
                     LOG.e("cls", classe.getSimpleName());
                 }
-                runtime.getGlobalObject().set("jsapi", apiObj);
+                runtime.getGlobalObject().setProperty("jsapi", apiObj);
             }
             String jsContent = FileUtils.loadModule(js);
 
@@ -129,19 +128,34 @@ public class SpiderJS extends Spider {
             }
             //LOG.e("cls", jsContent);
             runtime.evaluateModule(jsContent + "\n\n;console.log(typeof(" + key + ".init));\n\nconsole.log(typeof(req));\n\nconsole.log(Object.keys(" + key + "));", js);
-            jsObject = (JSObject) runtime.get(runtime.getGlobalObject(), key);
+            jsObject = (JSObject) runtime.getGlobalObject().getProperty(key);
             return null;
         }).get();
     }
 
     private void initConsole() {
-        JSObject local = runtime.createJSObject();
-        runtime.getGlobalObject().set("local", local);
-        local.bind(new local());
+        JSObject local = runtime.createNewJSObject();
+        runtime.getGlobalObject().setProperty("local", local);
+        Json.bind(local, new local());
 
         runtime.setConsole(new QuickJSContext.Console() {
             @Override
             public void log(String s) {
+                LOG.i("QuJs", s);
+            }
+
+            @Override
+            public void info(String s) {
+                LOG.i("QuJs", s);
+            }
+
+            @Override
+            public void warn(String s) {
+                LOG.i("QuJs", s);
+            }
+
+            @Override
+            public void error(String s) {
                 LOG.i("QuJs", s);
             }
         });
@@ -172,7 +186,7 @@ public class SpiderJS extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        JSObject obj = submit(() -> new JSUtils<String>().toObj(runtime, extend)).get();
+        JSObject obj = submit(() -> Json.toJSObject(runtime, extend)).get();
         return (String) call("category", tid, pg, filter, obj);
     }
 
@@ -183,7 +197,7 @@ public class SpiderJS extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        JSArray array = submit(() -> new JSUtils<String>().toArray(runtime, vipFlags)).get();
+        JSArray array = submit(() -> Json.toJSArray(runtime, vipFlags)).get();
         return (String) call("play", flag, id, array);
     }
 
@@ -201,9 +215,9 @@ public class SpiderJS extends Spider {
     public Object[] proxyLocal(Map<String, String> params) throws Exception {
         return submit(() -> {
             try {
-                JSObject o = new JSUtils<String>().toObj(runtime, params);
+                JSObject o = Json.toJSObject(runtime, params);
                 JSFunction jsFunction = jsObject.getJSFunction("proxy");
-                JSONArray opt = new JSONArray(jsFunction.call(null, new Object[]{o}).toString());
+                JSONArray opt = new JSONArray(jsFunction.call(o).toString());
                 Object[] result = new Object[3];
                 result[0] = opt.opt(0);
                 result[1] = opt.opt(1);
