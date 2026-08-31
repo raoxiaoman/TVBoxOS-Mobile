@@ -18,6 +18,7 @@ import com.github.tvbox.osc.bean.Movie;
 import com.github.tvbox.osc.bean.MovieSort;
 import com.github.tvbox.osc.bean.SourceBean;
 import com.github.tvbox.osc.event.RefreshEvent;
+import com.github.tvbox.osc.event.SearchResultEvent;
 import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.LOG;
@@ -483,21 +484,21 @@ public class SourceViewModel extends ViewModel {
         }
     }
     // searchContent
-    public void getSearch(String sourceKey, String wd) {
+    public void getSearch(String sourceKey, String wd, long batchId) {
         SourceBean sourceBean = ApiConfig.get().getSource(sourceKey);
+        if (sourceBean == null) {
+            postSearchResult(batchId, sourceKey, null);
+            return;
+        }
         int type = sourceBean.getType();
         if (type == 3) {
             try {
                 Spider sp = ApiConfig.get().getCSP(sourceBean);
                 String search = sp.searchContent(wd, false);
-                if(!TextUtils.isEmpty(search)){
-                    json(searchResult, search, sourceBean.getKey());
-                } else {
-                    json(searchResult, "", sourceBean.getKey());
-                }
+                postSearchResult(batchId, sourceKey, json(null, TextUtils.isEmpty(search) ? "" : search, sourceKey));
             } catch (Throwable th) {
                 th.printStackTrace();
-                json(searchResult, "", sourceBean.getKey());
+                postSearchResult(batchId, sourceKey, null);
             }
         } else if (type == 0 || type == 1) {
             OkGo.<String>get(sourceBean.getApi())
@@ -516,55 +517,57 @@ public class SourceViewModel extends ViewModel {
 
                         @Override
                         public void onSuccess(Response<String> response) {
-                            if (type == 0) {
-                                String xml = response.body();
-                                xml(searchResult, xml, sourceBean.getKey());
-                            } else {
-                                String json = response.body();
-                                json(searchResult, json, sourceBean.getKey());
-                            }
+                            AbsXml data = type == 0
+                                    ? xml(null, response.body(), sourceKey)
+                                    : json(null, response.body(), sourceKey);
+                            postSearchResult(batchId, sourceKey, data);
                         }
 
                         @Override
                         public void onError(Response<String> response) {
                             super.onError(response);
-                            // searchResult.postValue(null);
-                            EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_SEARCH_RESULT, null));
+                            postSearchResult(batchId, sourceKey, null);
                         }
                     });
-        }else if (type == 4) {
+        } else if (type == 4) {
             OkGo.<String>get(sourceBean.getApi())
-                .params("wd", wd)
-                .params("ac" ,"detail")
-                .params("quick" ,"false")
-                .tag("search")
-                .execute(new AbsCallback<String>() {
-                    @Override
-                    public String convertResponse(okhttp3.Response response) throws Throwable {
-                        if (response.body() != null) {
-                            return response.body().string();
-                        } else {
-                            throw new IllegalStateException("网络请求错误");
+                    .params("wd", wd)
+                    .params("ac", "detail")
+                    .params("quick", "false")
+                    .tag("search")
+                    .execute(new AbsCallback<String>() {
+                        @Override
+                        public String convertResponse(okhttp3.Response response) throws Throwable {
+                            if (response.body() != null) {
+                                return response.body().string();
+                            } else {
+                                throw new IllegalStateException("网络请求错误");
+                            }
                         }
-                    }
 
-                    @Override
-                    public void onSuccess(Response<String> response) {
+                        @Override
+                        public void onSuccess(Response<String> response) {
                             String json = response.body();
-                        LOG.i(json);
-                            json(searchResult, json, sourceBean.getKey());
-                    }
+                            LOG.i(json);
+                            postSearchResult(batchId, sourceKey, json(null, json, sourceKey));
+                        }
 
-                    @Override
-                    public void onError(Response<String> response) {
-                        super.onError(response);
-                        // searchResult.postValue(null);
-                        EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_SEARCH_RESULT, null));
-                    }
-                });
+                        @Override
+                        public void onError(Response<String> response) {
+                            super.onError(response);
+                            postSearchResult(batchId, sourceKey, null);
+                        }
+                    });
         } else {
-            searchResult.postValue(null);
+            postSearchResult(batchId, sourceKey, null);
         }
+    }
+
+    private void postSearchResult(long batchId, String sourceKey, AbsXml data) {
+        EventBus.getDefault().post(new RefreshEvent(
+                RefreshEvent.TYPE_SEARCH_RESULT,
+                new SearchResultEvent(batchId, sourceKey, data)
+        ));
     }
     // searchContent
     public void getQuickSearch(String sourceKey, String wd) {

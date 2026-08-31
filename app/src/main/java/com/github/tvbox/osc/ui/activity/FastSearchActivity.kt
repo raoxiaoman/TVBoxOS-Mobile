@@ -19,7 +19,6 @@ import com.blankj.utilcode.util.KeyboardUtils
 import com.blankj.utilcode.util.LogUtils
 import com.blankj.utilcode.util.ToastUtils
 import com.chad.library.adapter.base.BaseQuickAdapter
-import com.github.catvod.crawler.JsLoader
 import com.github.tvbox.osc.R
 import com.github.tvbox.osc.api.ApiConfig
 import com.github.tvbox.osc.base.BaseVbActivity
@@ -28,7 +27,9 @@ import com.github.tvbox.osc.bean.Movie
 import com.github.tvbox.osc.bean.SourceBean
 import com.github.tvbox.osc.databinding.ActivityFastSearchBinding
 import com.github.tvbox.osc.event.RefreshEvent
+import com.github.tvbox.osc.event.SearchResultEvent
 import com.github.tvbox.osc.event.ServerEvent
+import com.github.tvbox.osc.search.SearchBatch
 import com.github.tvbox.osc.ui.adapter.FastSearchAdapter
 import com.github.tvbox.osc.ui.adapter.SearchWordAdapter
 import com.github.tvbox.osc.ui.dialog.SearchCheckboxDialog
@@ -53,12 +54,12 @@ import com.orhanobut.hawk.Hawk
 import com.zhy.view.flowlayout.FlowLayout
 import com.zhy.view.flowlayout.TagAdapter
 import okhttp3.Response
+import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 import java.net.URLEncoder
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 
 class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatcher {
 
@@ -78,6 +79,9 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
     private var searchFilterKey: String? = "" // 过滤的key
     private var resultVods = HashMap<String, MutableList<Movie.Video>>()
     private var pauseRunnable: MutableList<Runnable>? = null
+    private var pauseBatchId: Long? = null
+    private var nextBatchId = 0L
+    private var currentBatch: SearchBatch? = null
     private var mSearchSuggestionsDialog: SearchSuggestionsDialog? = null
     override fun init() {
         sourceViewModel = ViewModelProvider(this).get(SourceViewModel::class.java)
@@ -91,15 +95,23 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
 
     override fun onResume() {
         super.onResume()
-        if (pauseRunnable != null && pauseRunnable!!.size > 0) {
-            searchExecutorService = Executors.newFixedThreadPool(10)
-            allRunCount.set(pauseRunnable!!.size)
-            for (runnable: Runnable? in pauseRunnable!!) {
-                searchExecutorService!!.execute(runnable)
-            }
-            pauseRunnable!!.clear()
-            pauseRunnable = null
+        val pausedTasks = pauseRunnable
+        val batchId = pauseBatchId
+        pauseRunnable = null
+        pauseBatchId = null
+        if (pausedTasks.isNullOrEmpty()) {
+            return
         }
+        val batch = currentBatch
+        if (batchId == null || batch == null || !batch.matches(batchId)) {
+            pausedTasks.clear()
+            return
+        }
+        searchExecutorService = Executors.newFixedThreadPool(10)
+        for (task in pausedTasks) {
+            searchExecutorService!!.execute(task)
+        }
+        pausedTasks.clear()
     }
 
     private fun initView() {
@@ -128,15 +140,7 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         searchAdapter.setOnItemClickListener { _, view, position ->
             FastClickCheckUtil.check(view)
             val video = searchAdapter.data[position]
-            try {
-                if (searchExecutorService != null) {
-                    pauseRunnable = searchExecutorService!!.shutdownNow()
-                    searchExecutorService = null
-                    JsLoader.stopAll()
-                }
-            } catch (th: Throwable) {
-                th.printStackTrace()
-            }
+            pauseSearch()
             val bundle = Bundle()
             bundle.putString("id", video.id)
             bundle.putString("sourceKey", video.sourceKey)
@@ -149,15 +153,7 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
             FastClickCheckUtil.check(view)
             val video = searchAdapterFilter.data[position]
             if (video != null) {
-                try {
-                    if (searchExecutorService != null) {
-                        pauseRunnable = searchExecutorService!!.shutdownNow()
-                        searchExecutorService = null
-                        JsLoader.stopAll()
-                    }
-                } catch (th: Throwable) {
-                    th.printStackTrace()
-                }
+                pauseSearch()
                 val bundle = Bundle()
                 bundle.putString("id", video.id)
                 bundle.putString("sourceKey", video.sourceKey)
@@ -385,12 +381,22 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     override fun refresh(event: RefreshEvent) {
-        if (event.type == RefreshEvent.TYPE_SEARCH_RESULT) {
-            try {
-                searchData(if (event.obj == null) null else event.obj as AbsXml)
-            } catch (e: Exception) {
-                searchData(null)
+        if (event.type != RefreshEvent.TYPE_SEARCH_RESULT) {
+            return
+        }
+        when (val result = event.obj) {
+            is SearchResultEvent -> {
+                val batch = currentBatch ?: return
+                if (!batch.matches(result.batchId)) {
+                    return
+                }
+                searchData(result.sourceKey, result.data)
+                if (!result.sourceKey.isNullOrEmpty() && batch.complete(result.sourceKey) == 0) {
+                    finishSearch()
+                }
             }
+            is AbsXml -> if (currentBatch == null) searchData("", result)
+            null -> if (currentBatch == null) searchData("", null)
         }
     }
 
@@ -430,7 +436,20 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
     }
 
     private var searchExecutorService: ExecutorService? = null
-    private val allRunCount = AtomicInteger(0)
+
+    private fun pauseSearch() {
+        try {
+            if (searchExecutorService != null) {
+                pauseBatchId = currentBatch?.id
+                pauseRunnable = searchExecutorService!!.shutdownNow()
+                searchExecutorService = null
+                ApiConfig.get().stopAllJs()
+            }
+        } catch (th: Throwable) {
+            th.printStackTrace()
+        }
+    }
+
     private fun getSiteTextView(text: String): TextView {
         val textView = TextView(this)
         textView.text = text
@@ -443,45 +462,69 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         return textView
     }
 
+    private fun sourcePriority(source: SourceBean, homeKey: String): Int {
+        if (homeKey.isNotEmpty() && source.key == homeKey) {
+            return 0
+        }
+        return when (source.type) {
+            0, 1, 4 -> 1
+            3 -> if (ApiConfig.get().isCspRuntimeReady(source)) 2 else 3
+            else -> 3
+        }
+    }
+
     private fun searchResult() {
+        currentBatch = null
+        pauseRunnable?.clear()
+        pauseRunnable = null
+        pauseBatchId = null
         try {
             if (searchExecutorService != null) {
                 searchExecutorService!!.shutdownNow()
                 searchExecutorService = null
-                JsLoader.stopAll()
+                ApiConfig.get().stopAllJs()
             }
         } catch (th: Throwable) {
             th.printStackTrace()
         } finally {
             searchAdapter.setNewData(ArrayList())
             searchAdapterFilter.setNewData(ArrayList())
-            allRunCount.set(0)
         }
         searchExecutorService = Executors.newFixedThreadPool(10)
-        val searchRequestList: MutableList<SourceBean> = ArrayList()
-        searchRequestList.addAll(ApiConfig.get().sourceBeanList)
-        val home = ApiConfig.get().homeSourceBean
-        searchRequestList.remove(home)
-        searchRequestList.add(0, home)
+        val apiConfig = ApiConfig.get()
+        val homeKey = apiConfig.homeSourceBean?.key.orEmpty()
+        val searchRequestList = apiConfig.sourceBeanList
+            .filter { it.isSearchable }
+            .filter { mCheckSources?.containsKey(it.key) != false }
+            .withIndex()
+            .sortedWith(compareBy({ sourcePriority(it.value, homeKey) }, { it.index }))
+            .map { it.value }
         val siteKey = ArrayList<String>()
         mBinding.tabLayout.addView(getSiteTextView("全部显示"))
         mBinding.tabLayout.setCurrentItem(0, true, false)
         for (bean: SourceBean in searchRequestList) {
-            if (!bean.isSearchable) {
-                continue
-            }
-            if (mCheckSources != null && !mCheckSources!!.containsKey(bean.key)) {
-                continue
-            }
             siteKey.add(bean.key)
             spNames[bean.name] = bean.key
-            allRunCount.incrementAndGet()
+        }
+        val batchId = ++nextBatchId
+        val searchWord = searchTitle
+        val batch = SearchBatch(batchId, siteKey)
+        currentBatch = batch
+        if (batch.isComplete()) {
+            finishSearch()
+            return
         }
         for (key: String in siteKey) {
             searchExecutorService!!.execute {
                 try {
-                    sourceViewModel.getSearch(key, searchTitle)
+                    sourceViewModel.getSearch(key, searchWord, batchId)
                 } catch (_: Exception) {
+                    EventBus.getDefault().post(
+                        RefreshEvent(
+                            RefreshEvent.TYPE_SEARCH_RESULT,
+                            SearchResultEvent(batchId, key, null)
+                        )
+                    )
                 }
             }
         }
@@ -526,19 +569,19 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         return if (matchNum == arr.size) true else false
     }
 
-    private fun searchData(absXml: AbsXml?) {
+    private fun searchData(sourceKey: String, absXml: AbsXml?) {
         var lastSourceKey = ""
         if ((absXml != null) && (absXml.movie != null) && (absXml.movie.videoList != null) && (absXml.movie.videoList.size > 0)) {
             val data: MutableList<Movie.Video> = ArrayList()
             for (video: Movie.Video in absXml.movie.videoList) {
                 if (!matchSearchResult(video.name, searchTitle)) continue
                 data.add(video)
-                if (!resultVods.containsKey(video.sourceKey)) {
-                    resultVods[video.sourceKey] = ArrayList()
+                if (!resultVods.containsKey(sourceKey)) {
+                    resultVods[sourceKey] = ArrayList()
                 }
-                resultVods[video.sourceKey]!!.add(video)
-                if (video.sourceKey !== lastSourceKey) { // 添加到最后面并记录最后一个key用于下次判断
-                    lastSourceKey = addWordAdapterIfNeed(video.sourceKey)
+                resultVods[sourceKey]!!.add(video)
+                if (sourceKey != lastSourceKey) { // 添加到最后面并记录最后一个key用于下次判断
+                    lastSourceKey = addWordAdapterIfNeed(sourceKey)
                 }
             }
             if (searchAdapter.data.size > 0) {
@@ -549,12 +592,11 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
                 searchAdapter.setNewData(data)
             }
         }
-        val count = allRunCount.decrementAndGet()
-        if (count <= 0) {
-            if (searchAdapter.data.size <= 0) {
-                showEmpty()
-            }
-            cancel()
+    }
+
+    private fun finishSearch() {
+        if (searchAdapter.data.isEmpty()) {
+            showEmpty()
         }
     }
 
@@ -569,7 +611,7 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
             if (searchExecutorService != null) {
                 searchExecutorService!!.shutdownNow()
                 searchExecutorService = null
-                JsLoader.load()
+                ApiConfig.get().stopAllJs()
             }
         } catch (th: Throwable) {
             th.printStackTrace()
