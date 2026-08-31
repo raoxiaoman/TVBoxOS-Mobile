@@ -179,4 +179,6 @@ dependencies {
     implementation project(":crash")
     // Lifecycles only (without ViewModel or LiveData)
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.2.0"
+
+    testImplementation 'junit:junit:4.13.2'
 }
