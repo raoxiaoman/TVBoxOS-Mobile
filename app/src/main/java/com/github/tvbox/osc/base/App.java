@@ -4,7 +4,7 @@ import android.text.TextUtils;
 
 import androidx.multidex.MultiDexApplication;
 
-import com.github.catvod.crawler.JsLoader;
+import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.bean.Subscription;
 import com.github.tvbox.osc.bean.VodInfo;
@@ -139,7 +139,7 @@ public class App extends MultiDexApplication {
     @Override
     public void onTerminate() {
         super.onTerminate();
-        JsLoader.load();
+        ApiConfig.get().clearJs();
     }
 
     private void putDefault(String key, Object value) {

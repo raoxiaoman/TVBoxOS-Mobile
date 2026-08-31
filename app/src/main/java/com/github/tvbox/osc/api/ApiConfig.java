@@ -2,6 +2,7 @@ package com.github.tvbox.osc.api;
 
 import android.app.Activity;
 import android.net.Uri;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.Base64;
 
@@ -30,6 +31,8 @@ import com.lzy.okgo.OkGo;
 import com.lzy.okgo.callback.AbsCallback;
 import com.lzy.okgo.model.Response;
 import com.orhanobut.hawk.Hawk;
+
+import okhttp3.ResponseBody;
 
 import org.apache.commons.lang3.StringUtils;
 import org.json.JSONObject;
@@ -130,6 +133,8 @@ public class ApiConfig {
     }
 
     public void loadConfig(boolean useCache, LoadConfigCallback callback, Activity activity) {
+        jarLoader.clear();
+        jsLoader.clear();
         String apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (apiUrl.isEmpty()) {
             callback.error("-1");
@@ -246,24 +251,27 @@ public class ApiConfig {
         String jarUrl = urls[0];
         String md5 = urls.length > 1 ? urls[1].trim() : "";
         File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/csp.jar");
+        String blockedEntry = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+                ? "assets/ftyshinidie.guard" : null;
+        if (!DynamicCode.restoreReadOnlyTarget(cache, "classes.dex", blockedEntry)) {
+            callback.error("");
+            return;
+        }
 
         if (!md5.isEmpty() || useCache) {
             if (cache.exists() && (useCache || MD5.getFileMd5(cache).equalsIgnoreCase(md5))) {
-                if (DynamicCode.ensureReadOnly(cache)) {
-                    if (jarLoader.load(cache.getAbsolutePath())) {
-                        callback.success();
-                    } else {
-                        callback.error("");
-                    }
-                    return;
+                if (DynamicCode.ensureReadOnly(cache) && jarLoader.load(cache.getAbsolutePath())) {
+                    callback.success();
+                } else {
+                    callback.error("");
                 }
-                cache.delete();
+                return;
             }
         }
 
         boolean isJarInImg = jarUrl.startsWith("img+");
-        jarUrl = jarUrl.replace("img+", "");
-        OkGo.<File>get(jarUrl)
+        String downloadUrl = jarUrl.replace("img+", "");
+        OkGo.<File>get(downloadUrl)
                 .headers("User-Agent", userAgent)
                 .headers("Accept", requestAccept)
                 .execute(new AbsCallback<File>() {
@@ -271,29 +279,50 @@ public class ApiConfig {
             @Override
             public File convertResponse(okhttp3.Response response) throws Throwable {
                 File cacheDir = cache.getParentFile();
-                if (!cacheDir.exists())
-                    cacheDir.mkdirs();
-                FileOutputStream fos = DynamicCode.openReadOnlyOutput(cache);
-                if(isJarInImg) {
-                    String respData = response.body().string();
-                    byte[] imgJar = getImgJar(respData);
-                    fos.write(imgJar);
-                } else {
-                    fos.write(response.body().bytes());
+                if (!cacheDir.exists() && !cacheDir.mkdirs() && !cacheDir.isDirectory()) {
+                    throw new IllegalStateException("动态代码缓存目录不可用");
                 }
-                fos.flush();
-                fos.close();
-                return cache;
+                File temp = DynamicCode.createTempFile(cache);
+                boolean published = false;
+                try {
+                    if (!response.isSuccessful()) {
+                        throw new IllegalStateException("下载动态代码失败");
+                    }
+                    ResponseBody body = response.body();
+                    if (body == null) {
+                        throw new IllegalStateException("动态代码响应为空");
+                    }
+                    try (FileOutputStream output = new FileOutputStream(temp)) {
+                        if (isJarInImg) {
+                            output.write(getImgJar(body.string()));
+                        } else {
+                            try (InputStream input = body.byteStream()) {
+                                byte[] buffer = new byte[8192];
+                                int length;
+                                while ((length = input.read(buffer)) != -1) {
+                                    if (length > 0) output.write(buffer, 0, length);
+                                }
+                            }
+                        }
+                        output.flush();
+                    }
+                    if (!publishMainJar(temp, cache, md5, blockedEntry)) {
+                        throw new IllegalStateException("动态代码校验失败");
+                    }
+                    published = true;
+                    return cache;
+                } finally {
+                    if (!published) {
+                        DynamicCode.deleteQuietly(temp);
+                    }
+                    response.close();
+                }
             }
 
             @Override
             public void onSuccess(Response<File> response) {
-                if (response.body().exists()) {
-                    if (jarLoader.load(response.body().getAbsolutePath())) {
-                        callback.success();
-                    } else {
-                        callback.error("");
-                    }
+                if (response.body().exists() && jarLoader.load(response.body().getAbsolutePath())) {
+                    callback.success();
                 } else {
                     callback.error("");
                 }
@@ -305,6 +334,21 @@ public class ApiConfig {
                 callback.error("");
             }
         });
+    }
+
+    static boolean publishMainJar(File temp, File cache, String md5, String blockedEntry) {
+        try {
+            if (DynamicCode.inspectJar(temp, "classes.dex", blockedEntry) != DynamicCode.JarInspection.COMPATIBLE) {
+                return false;
+            }
+            if (!md5.isEmpty() && !MD5.getFileMd5(temp).equalsIgnoreCase(md5)) {
+                return false;
+            }
+            DynamicCode.publishReadOnly(temp, cache);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private void parseJson(String apiUrl, File f) throws Throwable {
@@ -736,10 +780,27 @@ public class ApiConfig {
         return spider;
     }
 
+    public void stopAllJs() {
+        jsLoader.stopAll();
+    }
+
+    public void clearJs() {
+        jsLoader.clear();
+    }
+
     public Spider getCSP(SourceBean sourceBean) {
         boolean js = sourceBean.getApi().endsWith(".js") || sourceBean.getApi().contains(".js?");
         if (js) return jsLoader.getSpider(sourceBean.getKey(), sourceBean.getApi(), sourceBean.getExt(), sourceBean.getJar());
         return jarLoader.getSpider(sourceBean.getKey(), sourceBean.getApi(), sourceBean.getExt(), sourceBean.getJar());
+    }
+
+    public boolean isCspRuntimeReady(SourceBean sourceBean) {
+        if (sourceBean == null) {
+            return false;
+        }
+        boolean js = sourceBean.getApi().endsWith(".js") || sourceBean.getApi().contains(".js?");
+        return js ? jsLoader.isRuntimeReady(sourceBean.getJar())
+                : jarLoader.isRuntimeReady(sourceBean.getJar());
     }
 
     public Object[] proxyLocal(Map param) {
