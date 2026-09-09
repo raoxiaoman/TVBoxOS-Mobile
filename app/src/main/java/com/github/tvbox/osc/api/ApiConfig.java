@@ -591,19 +591,20 @@ public class ApiConfig {
                     }
                 }
 
-                // takagen99: Load Live Channel from settings URL (WIP)
-                if (StringUtils.isBlank(liveURL_final)) {
-                    liveURL_final = liveURL;
-                }
-                if (!StringUtils.isBlank(liveURL_final)) {
-                    liveURL_final = Base64.encodeToString(liveURL_final.getBytes("UTF-8"), Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
-                    liveURL_final = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + liveURL_final;
-                    LiveChannelGroup liveChannelGroup = new LiveChannelGroup();
-                    liveChannelGroup.setGroupName(liveURL_final);
-                    liveChannelGroupList.add(liveChannelGroup);
-                }
             }
 
+            // A live source entered in settings must also work when the subscription
+            // does not declare a lives field.
+            if (StringUtils.isBlank(liveURL_final)) {
+                liveURL_final = liveURL;
+            }
+            if (!StringUtils.isBlank(liveURL_final)) {
+                liveURL_final = Base64.encodeToString(liveURL_final.getBytes("UTF-8"), Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
+                liveURL_final = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + liveURL_final;
+                LiveChannelGroup liveChannelGroup = new LiveChannelGroup();
+                liveChannelGroup.setGroupName(liveURL_final);
+                liveChannelGroupList.add(liveChannelGroup);
+            }
 
         } catch (Throwable th) {
             th.printStackTrace();
