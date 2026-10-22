@@ -41,4 +41,11 @@
 
     <string-array name="api_name">
     </string-array>
+    <string name="loading_subscription">正在读取订阅配置…</string>
+    <string name="loading_spider">正在初始化播放组件…</string>
+    <string name="loading_home_source">正在加载首页站点…</string>
+    <string name="refresh_home">刷新首页</string>
+    <string name="update_subscription">更新订阅</string>
+    <string name="switch_subscription">切换订阅</string>
+    <string name="subscription_update_fallback">更新失败，已使用上次保存的配置</string>
 </resources>

@@ -7,8 +7,10 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.viewbinding.ViewBinding
+import com.github.tvbox.osc.R
 import com.github.tvbox.osc.callback.EmptyCallback
 import com.github.tvbox.osc.callback.LoadingCallback
 import com.kingja.loadsir.core.LoadService
@@ -90,10 +92,20 @@ abstract class BaseVbFragment<T : ViewBinding> : Fragment(), CustomAdapt {
         mLoadService = LoadSir.getDefault().register(view) { }
     }
 
-    protected fun showLoading() {
-        if (mLoadService != null) {
-            mLoadService!!.showCallback(LoadingCallback::class.java)
+    protected fun showLoading() = showLoading(null)
+
+    protected fun showLoading(message: String?) {
+        mLoadService?.setCallBack(LoadingCallback::class.java) { _, view ->
+            view.findViewById<TextView>(R.id.loading_message).apply {
+                text = message
+                visibility = if (message.isNullOrEmpty()) {
+                    View.GONE
+                } else {
+                    View.VISIBLE
+                }
+            }
         }
+        mLoadService?.showCallback(LoadingCallback::class.java)
     }
 
     protected fun showEmpty() {

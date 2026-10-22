@@ -26,11 +26,13 @@ class MainActivity : BaseVbActivity<ActivityMainBinding>() {
     private val fragments = listOf(HomeFragment(), MyFragment())
     private lateinit var bottomNavigation: BottomNavigationView
     var useCacheConfig = false
+    var forceRefreshConfig = false
     private var exitTime = 0L
 
     override fun init() {
 
         useCacheConfig = intent.extras?.getBoolean(IntentKey.CACHE_CONFIG_CHANGED, false) ?: false
+        forceRefreshConfig = intent.getBooleanExtra(IntentKey.FORCE_CONFIG_REFRESH, false)
 
         mBinding.vp.adapter = object : FragmentStateAdapter(this) {
             override fun getItemCount() = fragments.size

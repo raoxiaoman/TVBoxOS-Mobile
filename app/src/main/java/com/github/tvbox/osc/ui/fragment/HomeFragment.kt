@@ -3,6 +3,7 @@ package com.github.tvbox.osc.ui.fragment
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
+import android.os.SystemClock
 import android.view.Gravity
 import android.widget.TextView
 import androidx.fragment.app.Fragment
@@ -39,6 +40,7 @@ import com.github.tvbox.osc.ui.dialog.SelectDialog
 import com.github.tvbox.osc.ui.dialog.TipDialog
 import com.github.tvbox.osc.util.DefaultConfig
 import com.github.tvbox.osc.util.HawkConfig
+import com.github.tvbox.osc.util.LOG
 import com.github.tvbox.osc.viewmodel.SourceViewModel
 import com.lxj.xpopup.XPopup
 import com.orhanobut.hawk.Hawk
@@ -72,6 +74,8 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
     private var mSortDataList: List<SortData> = ArrayList()
     private var dataInitOk = false
     private var jarInitOk = false
+    private var startupStartedAt = 0L
+    private var homeReadyReported = false
 
     var errorTipDialog: TipDialog? = null
 
@@ -82,6 +86,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
     var onlyConfigChanged = false
 
     override fun init() {
+        startupStartedAt = SystemClock.elapsedRealtime()
         ControlManager.get().startServer()
         mBinding.nameContainer.setOnClickListener {
             if (dataInitOk && jarInitOk) {
@@ -91,7 +96,7 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             }
         }
         mBinding.nameContainer.setOnLongClickListener {
-            refreshHomeSources()
+            showRefreshOptions()
             true
         }
         mBinding.search.setOnClickListener {
@@ -112,6 +117,10 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         sourceViewModel = ViewModelProvider(this).get(SourceViewModel::class.java)
         sourceViewModel?.sortResult?.observe(this) { absXml: AbsSortXml? ->
             showSuccess()
+            if (!homeReadyReported) {
+                homeReadyReported = true
+                LOG.i("HomeStartup", "home_ready elapsed_ms=${SystemClock.elapsedRealtime() - startupStartedAt}")
+            }
             mSortDataList =
                 if (absXml?.classes != null && absXml.classes.sortList != null) {
                     DefaultConfig.adjustSort(
@@ -136,30 +145,37 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
             mBinding.tvName.postDelayed({ mBinding.tvName.isSelected = true }, 2000)
         }
 
-        showLoading()
         when{
             dataInitOk && jarInitOk -> {
+                showLoading(getString(R.string.loading_home_source))
                 //正常初始化会先加载,最终到这,此时数据有以下几种情况
                 // 1. api/jar/spider等均加载完,正常显示数据。2. 缺失spider(存疑?)/api配置有问题同样加载(最后空布局 或 只有豆瓣首页)
                 sourceViewModel?.getSort(ApiConfig.get().homeSourceBean.key)
             }
             dataInitOk && !jarInitOk -> {
+                showLoading(getString(R.string.loading_spider))
                 loadJar()
             }
             else -> {
+                showLoading(getString(R.string.loading_subscription))
                 loadConfig()
             }
         }
     }
 
     private fun loadConfig(){
-        ApiConfig.get().loadConfig(onlyConfigChanged, object : LoadConfigCallback {
+        val forceRefresh = (mActivity as MainActivity).forceRefreshConfig
+        ApiConfig.get().loadConfig(forceRefresh, object : LoadConfigCallback {
 
             override fun retry() {
                 mHandler.post { initData() }
             }
 
             override fun success() {
+                if (!isAdded) {
+                    return
+                }
+                LOG.i("HomeStartup", "config_ready elapsed_ms=${SystemClock.elapsedRealtime() - startupStartedAt}")
                 dataInitOk = true
                 if (ApiConfig.get().spider.isEmpty()) {
                     jarInitOk = true
@@ -167,7 +183,16 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                 mHandler.postDelayed({ initData() }, 50)
             }
 
+            override fun cacheFallback() {
+                if (isAdded) {
+                    ToastUtils.showLong(R.string.subscription_update_fallback)
+                }
+            }
+
             override fun error(msg: String) {
+                if (!isAdded) {
+                    return
+                }
                 if (msg.equals("-1", ignoreCase = true)) {
                     mHandler.post {
                         dataInitOk = true
@@ -188,6 +213,10 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
                 ApiConfig.get().spider,
                 object : LoadConfigCallback {
                     override fun success() {
+                        if (!isAdded) {
+                            return
+                        }
+                        LOG.i("HomeStartup", "spider_ready elapsed_ms=${SystemClock.elapsedRealtime() - startupStartedAt}")
                         jarInitOk = true
                         mHandler.postDelayed({
                             if (!onlyConfigChanged) {
@@ -349,11 +378,27 @@ class HomeFragment : BaseVbFragment<FragmentHomeBinding>() {
         }
     }
 
-    private fun refreshHomeSources() {
+    private fun showRefreshOptions() {
+        XPopup.Builder(requireContext())
+            .atView(mBinding.nameContainer)
+            .asAttachList(
+                arrayOf(getString(R.string.refresh_home), getString(R.string.update_subscription),
+                    getString(R.string.switch_subscription)), null
+            ) { position, _ ->
+                when (position) {
+                    0 -> refreshHomeSources()
+                    1 -> refreshHomeSources(forceRefresh = true)
+                    2 -> jumpActivity(SubscriptionActivity::class.java)
+                }
+            }.show()
+    }
+
+    private fun refreshHomeSources(forceRefresh: Boolean = false) {
         val intent = Intent(App.getInstance(), MainActivity::class.java)
         intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
         val bundle = Bundle()
-        bundle.putBoolean(IntentKey.CACHE_CONFIG_CHANGED, true)
+        bundle.putBoolean(IntentKey.CACHE_CONFIG_CHANGED, !forceRefresh)
+        bundle.putBoolean(IntentKey.FORCE_CONFIG_REFRESH, forceRefresh)
         intent.putExtras(bundle)
         startActivity(intent)
     }

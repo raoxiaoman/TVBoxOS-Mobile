@@ -11,4 +11,5 @@ public class IntentKey {
     public static final int BROADCAST_ACTION_NEXT = 2;
     public static final int BROADCAST_ACTION_CLOSE = 3;
     public static final String CACHE_CONFIG_CHANGED = "use_cache";
+    public static final String FORCE_CONFIG_REFRESH = "force_config_refresh";
 }

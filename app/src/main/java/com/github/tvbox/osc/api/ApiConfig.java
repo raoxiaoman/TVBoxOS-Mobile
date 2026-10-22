@@ -3,6 +3,9 @@ package com.github.tvbox.osc.api;
 import android.app.Activity;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Base64;
 
@@ -10,6 +13,7 @@ import com.github.catvod.crawler.JarLoader;
 import com.github.catvod.crawler.JsLoader;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.utils.DynamicCode;
+import com.github.catvod.utils.GenerationPublisher;
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.IJKCode;
@@ -21,6 +25,7 @@ import com.github.tvbox.osc.util.AES;
 import com.github.tvbox.osc.util.AdBlocker;
 import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.HawkConfig;
+import com.github.tvbox.osc.util.LOG;
 import com.github.tvbox.osc.util.MD5;
 import com.github.tvbox.osc.util.VideoParseRuler;
 import com.google.gson.Gson;
@@ -39,15 +44,17 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -72,6 +79,10 @@ public class ApiConfig {
 
     private JarLoader jarLoader = new JarLoader();
     private JsLoader jsLoader = new JsLoader();
+    private final GenerationPublisher configGeneration = new GenerationPublisher();
+    private final ExecutorService configExecutor = Executors.newSingleThreadExecutor();
+    private final Handler configHandler = new Handler(Looper.getMainLooper());
+    private final Object configRequestTag = new Object();
 
     private String userAgent = "okhttp/3.15";
 
@@ -132,7 +143,11 @@ public class ApiConfig {
         return "".getBytes();
     }
 
-    public void loadConfig(boolean useCache, LoadConfigCallback callback, Activity activity) {
+    public void loadConfig(boolean forceRefresh, LoadConfigCallback callback, Activity activity) {
+        configGeneration.advance();
+        long generation = configGeneration.current();
+        long startedAt = SystemClock.elapsedRealtime();
+        OkGo.getInstance().cancelTag(configRequestTag);
         jarLoader.clear();
         jsLoader.clear();
         String apiUrl = Hawk.get(HawkConfig.API_URL, "");
@@ -140,111 +155,167 @@ public class ApiConfig {
             callback.error("-1");
             return;
         }
-        File cache = new File(App.getInstance().getFilesDir().getAbsolutePath() + "/" + MD5.encode(apiUrl));
-        if (useCache && cache.exists()) {
-            try {
-                parseJson(apiUrl, cache);
-                callback.success();
+        ConfigCache cache = new ConfigCache(new File(App.getInstance().getFilesDir(), MD5.encode(apiUrl)));
+        configExecutor.execute(() -> {
+            if (apiUrl.startsWith("assets://") || apiUrl.startsWith("content://")) {
+                try {
+                    String json = apiUrl.startsWith("assets://")
+                            ? readAssetConfig(apiUrl.substring("assets://".length()))
+                            : readContentConfig(Uri.parse(apiUrl));
+                    ConfigCache.parse(json);
+                    if (apiUrl.startsWith("content://")) {
+                        configGeneration.publishIfCurrent(generation, () -> cache.write(json));
+                    }
+                    configHandler.post(() -> {
+                        if (isCurrentConfig(apiUrl, generation)
+                                && !applyConfig(apiUrl, json, callback, "local", startedAt)) {
+                            callback.error("解析本地配置失败");
+                        }
+                    });
+                } catch (Exception error) {
+                    configHandler.post(() -> {
+                        if (isCurrentConfig(apiUrl, generation)) {
+                            callback.error("无法读取本地配置文件");
+                        }
+                    });
+                }
                 return;
-            } catch (Throwable th) {
-                th.printStackTrace();
             }
+            String cached = null;
+            if (!forceRefresh) {
+                try {
+                    cached = cache.read();
+                } catch (Exception ignored) {
+                    // 首次导入或缓存无效时才等待网络；不删除历史缓存。
+                }
+            }
+            String cachedJson = cached;
+            configHandler.post(() -> {
+                if (!isCurrentConfig(apiUrl, generation)) {
+                    return;
+                }
+                boolean cacheReady = cachedJson != null
+                        && applyConfig(apiUrl, cachedJson, callback, "cache", startedAt);
+                requestConfig(apiUrl, cache, generation, callback, cacheReady, forceRefresh, startedAt);
+            });
+        });
+    }
+
+    private boolean isCurrentConfig(String apiUrl, long generation) {
+        return configGeneration.isCurrent(generation)
+                && apiUrl.equals(Hawk.get(HawkConfig.API_URL, ""));
+    }
+
+    private boolean applyConfig(String apiUrl, String json, LoadConfigCallback callback,
+                                String origin, long startedAt) {
+        try {
+            parseJson(apiUrl, json);
+            LOG.i("Config", "config_loaded origin=" + origin + " sites=" + sourceBeanList.size()
+                    + " elapsed_ms=" + (SystemClock.elapsedRealtime() - startedAt));
+            callback.success();
+            return true;
+        } catch (Exception error) {
+            LOG.i("Config", "config_apply_failed error=" + error.getClass().getSimpleName());
+            return false;
         }
-        if (apiUrl.startsWith("assets://")) {
-            try {
-                parseJson(apiUrl, readAssetConfig(apiUrl.substring("assets://".length())));
-                callback.success();
-            } catch (Throwable th) {
-                th.printStackTrace();
-                callback.error("加载内置配置失败");
-            }
+    }
+
+    private void requestConfig(String apiUrl, ConfigCache cache, long generation,
+                               LoadConfigCallback callback, boolean background, boolean forceRefresh,
+                               long startedAt) {
+        if (!isCurrentConfig(apiUrl, generation)) {
             return;
         }
-        if (apiUrl.startsWith("content://")) {
-            try {
-                String json = readContentConfig(Uri.parse(apiUrl));
-                parseJson(apiUrl, json);
-                writeConfigCache(cache, json);
-                callback.success();
-            } catch (Throwable th) {
-                th.printStackTrace();
-                callback.error("无法读取本地配置文件");
-            }
-            return;
+        String[] parts = apiUrl.split(";pk;", 2);
+        String address = parts[0];
+        String configKey = parts.length > 1 ? parts[1] : null;
+        if (address.startsWith("clan://")) {
+            address = clanToAddress(address);
+        } else if (!address.startsWith("http")) {
+            address = "http://" + address;
         }
-        String TempKey = null, configUrl = "", pk = ";pk;";
-        if (apiUrl.contains(pk)) {
-            String[] a = apiUrl.split(pk);
-            TempKey = a[1];
-            if (apiUrl.startsWith("clan")){
-                configUrl = clanToAddress(a[0]);
-            }else if (apiUrl.startsWith("http")){
-                configUrl = a[0];
-            }else {
-                configUrl = "http://" + a[0];
-            }
-        } else if (apiUrl.startsWith("clan")) {
-            configUrl = clanToAddress(apiUrl);
-        } else if (!apiUrl.startsWith("http")) {
-            configUrl = "http://" + configUrl;
-        } else {
-            configUrl = apiUrl;
-        }
-        String configKey = TempKey;
-        OkGo.<String>get(configUrl)
+        OkGo.<String>get(address)
+                .tag(configRequestTag)
                 .headers("User-Agent", userAgent)
                 .headers("Accept", requestAccept)
                 .execute(new AbsCallback<String>() {
+                    private boolean cacheSaved;
+
+                    @Override
+                    public String convertResponse(okhttp3.Response response) throws Throwable {
+                        if (!response.isSuccessful() || response.body() == null) {
+                            throw new IllegalStateException("配置响应失败");
+                        }
+                        String json = FindResult(response.body().string(), configKey);
+                        if (apiUrl.startsWith("clan://")) {
+                            json = clanContentFix(clanToAddress(apiUrl), json);
+                        }
+                        json = fixContentPath(parts[0], json);
+                        ConfigCache.parse(json);
+                        String validatedJson = json;
+                        if (isCurrentConfig(apiUrl, generation)) {
+                            try {
+                                cacheSaved = configGeneration.publishIfCurrent(generation,
+                                        () -> cache.write(validatedJson));
+                            } catch (IOException error) {
+                                // 磁盘写入失败不阻止本次使用有效的网络配置。
+                                LOG.i("Config", "config_cache_write_failed");
+                            }
+                        }
+                        return json;
+                    }
+
                     @Override
                     public void onSuccess(Response<String> response) {
-                        try {
-                            String json = response.body();
-                            parseJson(apiUrl, json);
-                            try {
-                                writeConfigCache(cache, json);
-                            } catch (Throwable th) {
-                                th.printStackTrace();
-                            }
-                            callback.success();
-                        } catch (Throwable th) {
-                            th.printStackTrace();
-                            callback.error("解析配置失败");
+                        if (!isCurrentConfig(apiUrl, generation)) {
+                            return;
+                        }
+                        if (background) {
+                            // 只更新磁盘；不重新解析、不清空 Spider，也不影响浏览/播放中的配置。
+                            LOG.i("Config", "config_refresh_finished cache_saved=" + cacheSaved
+                                    + " elapsed_ms=" + (SystemClock.elapsedRealtime() - startedAt));
+                        } else if (!applyConfig(apiUrl, response.body(), callback, "network", startedAt)) {
+                            fallbackToCache(apiUrl, cache, generation, callback, forceRefresh, startedAt);
                         }
                     }
 
                     @Override
                     public void onError(Response<String> response) {
-                        super.onError(response);
-                        if (cache.exists()) {
-                            try {
-                                parseJson(apiUrl, cache);
-                                callback.success();
-                                return;
-                            } catch (Throwable th) {
-                                th.printStackTrace();
-                            }
+                        if (!isCurrentConfig(apiUrl, generation)) {
+                            return;
                         }
-                        callback.error("拉取配置失败\n" + (response.getException() != null ? response.getException().getMessage() : ""));
-                    }
-
-                    public String convertResponse(okhttp3.Response response) throws Throwable {
-                        String result = "";
-                        if (response.body() == null) {
-                            result = "";
+                        if (background) {
+                            LOG.i("Config", "config_refresh_failed cache_preserved=true");
                         } else {
-                            result = FindResult(response.body().string(), configKey);
+                            fallbackToCache(apiUrl, cache, generation, callback, forceRefresh, startedAt);
                         }
-
-                        if (apiUrl.startsWith("clan")) {
-                            result = clanContentFix(clanToAddress(apiUrl), result);
-                        }
-                        //假相對路徑
-                        result = fixContentPath(apiUrl,result);
-                        return result;
                     }
                 });
     }
 
+    private void fallbackToCache(String apiUrl, ConfigCache cache, long generation,
+                                 LoadConfigCallback callback, boolean forceRefresh, long startedAt) {
+        configExecutor.execute(() -> {
+            String json = null;
+            try {
+                json = cache.read();
+            } catch (Exception ignored) {
+            }
+            String cachedJson = json;
+            configHandler.post(() -> {
+                if (!isCurrentConfig(apiUrl, generation)) {
+                    return;
+                }
+                if (cachedJson != null && applyConfig(apiUrl, cachedJson, callback, "fallback", startedAt)) {
+                    if (forceRefresh) {
+                        callback.cacheFallback();
+                    }
+                } else {
+                    callback.error("拉取配置失败，且没有可用缓存");
+                }
+            });
+        });
+    }
 
     public void loadJar(boolean useCache, String spider, LoadConfigCallback callback) {
         String[] urls = spider.split(";md5;");
@@ -259,7 +330,7 @@ public class ApiConfig {
         }
 
         if (!md5.isEmpty() || useCache) {
-            if (cache.exists() && (useCache || MD5.getFileMd5(cache).equalsIgnoreCase(md5))) {
+            if (cache.exists() && (md5.isEmpty() ? useCache : MD5.getFileMd5(cache).equalsIgnoreCase(md5))) {
                 if (DynamicCode.ensureReadOnly(cache) && jarLoader.load(cache.getAbsolutePath())) {
                     callback.success();
                 } else {
@@ -351,19 +422,7 @@ public class ApiConfig {
         }
     }
 
-    private void parseJson(String apiUrl, File f) throws Throwable {
-        System.out.println("从本地缓存加载" + f.getAbsolutePath());
-        BufferedReader bReader = new BufferedReader(new InputStreamReader(new FileInputStream(f), "UTF-8"));
-        StringBuilder sb = new StringBuilder();
-        String s = "";
-        while ((s = bReader.readLine()) != null) {
-            sb.append(s + "\n");
-        }
-        bReader.close();
-        parseJson(apiUrl, sb.toString());
-    }
-
-    private String readAssetConfig(String assetPath) throws Throwable {
+    private String readAssetConfig(String assetPath) throws Exception {
         BufferedReader reader = new BufferedReader(new InputStreamReader(
                 App.getInstance().getAssets().open(assetPath), "UTF-8"));
         StringBuilder content = new StringBuilder();
@@ -375,7 +434,7 @@ public class ApiConfig {
         return content.toString();
     }
 
-    private String readContentConfig(Uri uri) throws Throwable {
+    private String readContentConfig(Uri uri) throws Exception {
         try (InputStream input = App.getInstance().getContentResolver().openInputStream(uri)) {
             if (input == null) {
                 throw new IllegalStateException("Unable to open local config");
@@ -391,18 +450,8 @@ public class ApiConfig {
         }
     }
 
-    private void writeConfigCache(File cache, String json) throws Throwable {
-        File cacheDir = cache.getParentFile();
-        if (!cacheDir.exists())
-            cacheDir.mkdirs();
-        try (FileOutputStream output = new FileOutputStream(cache)) {
-            output.write(json.getBytes("UTF-8"));
-            output.flush();
-        }
-    }
-
     private void parseJson(String apiUrl, String jsonStr) {
-        JsonObject infoJson = new Gson().fromJson(jsonStr, JsonObject.class);
+        JsonObject infoJson = ConfigCache.parse(jsonStr);
         // spider
         spider = DefaultConfig.safeJsonString(infoJson, "spider", "");
         // wallpaper
@@ -822,6 +871,9 @@ public class ApiConfig {
         void retry();
 
         void error(String msg);
+
+        default void cacheFallback() {
+        }
     }
 
     public interface FastParseCallback {
