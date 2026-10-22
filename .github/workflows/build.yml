@@ -79,8 +79,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # nightly 是滚动标签，仅更新此标签，不修改正式版本标签或分支。
+          git push --force origin "${GITHUB_SHA}:refs/tags/nightly"
           gh release delete nightly --yes || true
-          gh release create nightly --prerelease --title "Nightly Build" --notes "自动构建的干净版 APK" app/build/outputs/apk/debug/*.apk
+          gh release create nightly --verify-tag --prerelease --title "Nightly Build" --notes "自动构建的干净版 APK；源码提交：${GITHUB_SHA}" app/build/outputs/apk/debug/*.apk
 
       - name: Upload Gradle reports
         if: always()
