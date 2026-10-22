@@ -33,6 +33,8 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install Android API 34
         run: sdkmanager "platforms;android-34" "build-tools;35.0.0"
@@ -41,6 +43,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build APK
+        id: build_apk
         run: |
           chmod +x gradlew
           mkdir -p build
@@ -55,7 +58,7 @@ jobs:
           python3 scripts/verify_16k_elf.py "$apk"
 
       - name: Report Gradle failure
-        if: failure()
+        if: failure() && steps.build_apk.outcome == 'failure'
         run: |
           failure_line=$(grep -m 1 -E 'Execution failed for task|^e: | error: ' build/gradle-build.log || true)
           if [ -z "$failure_line" ]; then
@@ -71,7 +74,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish to GitHub Release
+      - name: Publish nightly release
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -118,6 +122,8 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install Android API 34
         run: sdkmanager "platforms;android-34" "build-tools;35.0.0"
