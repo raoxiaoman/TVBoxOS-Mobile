@@ -24,7 +24,7 @@
 
 ## 🛠 协作开发指南
 
-本项目使用 **GitHub Actions** 自动构建和发布，代码合并后即可自动触发构建和 Release，无需手动操作。
+本项目使用 **GitHub Actions** 自动构建和发布。非 Tag 工作流构建 Debug APK，仅推送到 `main` 或手动选择 `main` 运行时更新 `nightly` 预发布；`v*` Tag 工作流发布固定签名的版本 APK。实际步骤以 [build.yml](.github/workflows/build.yml) 为准。
 
 ### 参与方式
 
@@ -36,13 +36,20 @@
 
 | 触发条件 | 行为 |
 |---------|------|
-| 推送代码到 `main` 分支 | 自动构建 Debug APK，上传到 Artifacts（保留 14 天） |
-| PR 提交 | 自动构建 Debug APK，用于验证代码是否正常编译 |
+| 推送代码到 `main` 分支 | 构建 Debug APK、检查 16 KB 页大小兼容性、上传 Artifacts（保留 14 天），并尝试替换 `nightly` 预发布 |
+| PR 提交 | 构建 Debug APK、检查 16 KB 页大小兼容性并上传产物，不发布 |
+| 手动触发（分支） | 构建验证；仅选择 `main` 且前置步骤成功时更新 `nightly` 预发布 |
 | 推送 `v*` 格式的 Tag（如 `v2.1.27`） | 自动构建签名 APK → 创建 GitHub Release → 同步更新 `update.json` 和 README |
+
+### 首页启动与订阅更新
+
+- 普通启动优先使用已有的有效订阅缓存，再后台下载并校验新配置。后台更新只保存到磁盘，不打断当前浏览或播放；下次重新加载时使用新配置。
+- 长按首页左上角源名称，选择“刷新首页”“更新订阅”或“切换订阅”。需要立即拉取并应用配置时选择“更新订阅”；更新失败且有有效缓存时会回退并提示。
+- 加载提示分别显示配置读取、播放组件初始化和首页站点加载。首页站点仍需要请求内容源，缓存优先不保证第三方搜索或播放速度。
 
 ### 如何发布新版本
 
-发布 Release 只需两步：
+发布版本前必须配置工作流所需的固定签名 secrets（见 [CLAUDE.md](CLAUDE.md#设备与发布约束)）。随后更新版本并推送 Tag：
 
 1. **更新版本号**：修改 `app/build.gradle` 中的 `versionCode` 和 `versionName`
    ```
@@ -57,14 +64,14 @@
    > ⚠️ Tag 版本号必须与 `app/build.gradle` 中的 `versionName` 完全一致，否则构建会失败。
 
 推送 Tag 后，GitHub Actions 会自动执行以下操作：
-- 使用固定签名密钥构建 Release APK
+- 使用固定签名密钥执行 `:app:assembleDebug`，生成 Debug 变体 APK，并检查 16 KB 页大小兼容性
 - 将 APK 和 `update.json` 上传到 GitHub Releases
 - 自动更新 README 中的下载链接和更新记录
 - 推送更新后的 `update.json` 和 README 回 `main` 分支
 
 ### 注意事项
 
-- PR 合并后会触发普通构建验证，但不会自动发布 Release —— 只有推送 Tag 才会走发布流程
+- `v*` Tag 触发版本发布和 `update.json`、README 同步；`main` 上的推送或手动运行在前置步骤成功后更新 `nightly` 预发布。PR 和其他分支的手动运行不执行发布步骤。
 
 ## 📖介绍
 - 本仓库聚合了APP、解析源、直播源等项目，总之你要的一个仓库全搞定(拉到👇有福利)

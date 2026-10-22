@@ -1,5 +1,7 @@
 # 聚合搜索并发修复与性能优化实施计划
 
+> 历史设计资料（2026-08-31）：用于追溯方案，不是当前待办或执行指令。现役实现以源码、测试及根目录 [CLAUDE.md](../../../CLAUDE.md) 为准；文中的原子发布描述不代表当前实现提供原子替换保证，当前 `DynamicCode` 使用同目录临时文件、备份与重命名恢复。未勾选步骤不代表当前仍未实现，也不构成设备验收证据。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 修复共享 Spider JAR 并发读写导致的结果缺失和 JNI 崩溃，并通过订阅级运行时复用、任务优先级和批次隔离缩短聚合搜索首批结果时间。
