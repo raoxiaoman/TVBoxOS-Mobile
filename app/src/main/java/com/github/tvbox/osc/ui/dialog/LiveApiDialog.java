@@ -11,12 +11,14 @@ import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.databinding.DialogInputSubsriptionBinding;
 import com.github.tvbox.osc.databinding.DialogLiveApiBinding;
 import com.github.tvbox.osc.util.HawkConfig;
+import com.github.tvbox.osc.util.live.LiveStore;
 import com.lxj.xpopup.XPopup;
 import com.lxj.xpopup.core.CenterPopupView;
 import com.lxj.xpopup.interfaces.OnInputConfirmListener;
 import com.orhanobut.hawk.Hawk;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class LiveApiDialog extends CenterPopupView {
 
@@ -49,14 +51,14 @@ public class LiveApiDialog extends CenterPopupView {
         updateEt(liveApi);
 
         mBinding.ivHistory.setOnClickListener(view -> {
-            ArrayList<String> liveHistory = Hawk.get(HawkConfig.LIVE_HISTORY, new ArrayList<String>());
-            if (liveHistory.isEmpty()){
-                ToastUtils.showShort("暂无历史记录");
-                return;
+            LiveStore store = LiveStore.get();
+            List<LiveStore.Subscription> subscriptions = store.subscriptions();
+            String[] names = new String[subscriptions.size()];
+            for (int i = 0; i < names.length; i++) {
+                names[i] = subscriptions.get(i).name;
             }
-            new XPopup.Builder(getContext())
-                    .asCustom(new ApiHistoryDialog(getContext(),liveApi, this::updateEt))
-                    .show();
+            new XPopup.Builder(getContext()).asBottomList("直播订阅", names,
+                    (position, text) -> updateEt(subscriptions.get(position).url)).show();
         });
 
         mBinding.ivImport.setOnClickListener(view -> {
@@ -67,6 +69,9 @@ public class LiveApiDialog extends CenterPopupView {
         mBinding.btnConfirm.setOnClickListener(view -> {
             String newLive = mBinding.etUrl.getText().toString().trim();
             // Capture Live input into Settings & Live History (max 20)
+            LiveStore store = LiveStore.get();
+            store.select(store.upsert("", newLive).id);
+            store.save();
             Hawk.put(HawkConfig.LIVE_URL, newLive);
             if (!newLive.isEmpty()) {
                 ArrayList<String> liveHistory = Hawk.get(HawkConfig.LIVE_HISTORY, new ArrayList<String>());

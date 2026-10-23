@@ -47,8 +47,10 @@ public class AllChannelsRightDialog extends DrawerPopupView {
     protected void onCreate() {
         super.onCreate();
         mBinding = DialogAllChannelBinding.bind(getPopupImplView());
+        mBinding.getRoot().requestFocus();
         initChannelGroupView();
         initLiveChannelView();
+        mActivity.bindLiveBrowser(findViewById(R.id.live_browser), mBinding.mGroupGridView);
     }
 
     private void initChannelGroupView() {

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingHorizontal="12dp">
+    <TextView android:id="@+id/live_subscription" android:layout_width="0dp" android:layout_height="40dp"
+        android:gravity="center_vertical" android:text="切换直播订阅" android:textColor="@color/colorPrimary"
+        android:singleLine="true" android:ellipsize="end" android:contentDescription="选择或管理直播订阅"
+        app:layout_constraintTop_toTopOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" />
+    <EditText android:id="@+id/live_search" android:layout_width="0dp" android:layout_height="44dp"
+        android:hint="搜索当前订阅的频道" android:textColor="@color/text_foreground" android:textColorHint="@color/text_sub_foreground"
+        android:singleLine="true" android:inputType="text" android:imeOptions="actionDone" android:textSize="14sp"
+        app:layout_constraintTop_toBottomOf="@id/live_subscription" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toStartOf="@id/live_clear" />
+    <TextView android:id="@+id/live_clear" android:layout_width="48dp" android:layout_height="44dp" android:text="清除"
+        android:gravity="center" android:textColor="@color/text_sub_foreground" android:contentDescription="清除频道搜索"
+        app:layout_constraintTop_toTopOf="@id/live_search" app:layout_constraintEnd_toEndOf="parent" />
+    <TextView android:id="@+id/live_all" android:layout_width="0dp" android:layout_height="40dp" android:text="全部" android:gravity="center"
+        android:textColor="@color/text_foreground" app:layout_constraintTop_toBottomOf="@id/live_search"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toStartOf="@id/live_favorites" app:layout_constraintHorizontal_chainStyle="spread" />
+    <TextView android:id="@+id/live_favorites" android:layout_width="0dp" android:layout_height="40dp" android:text="收藏" android:gravity="center"
+        android:textColor="@color/text_foreground" app:layout_constraintTop_toTopOf="@id/live_all" app:layout_constraintStart_toEndOf="@id/live_all" app:layout_constraintEnd_toStartOf="@id/live_recent" />
+    <TextView android:id="@+id/live_recent" android:layout_width="0dp" android:layout_height="40dp" android:text="最近" android:gravity="center"
+        android:textColor="@color/text_foreground" app:layout_constraintTop_toTopOf="@id/live_all" app:layout_constraintStart_toEndOf="@id/live_favorites" app:layout_constraintEnd_toEndOf="parent" />
+    <TextView android:id="@+id/live_empty" android:layout_width="0dp" android:layout_height="wrap_content" android:visibility="gone"
+        android:textColor="@color/text_sub_foreground" android:paddingVertical="8dp" android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/live_all" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintBottom_toBottomOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>

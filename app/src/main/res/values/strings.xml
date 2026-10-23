@@ -48,4 +48,10 @@
     <string name="update_subscription">更新订阅</string>
     <string name="switch_subscription">切换订阅</string>
     <string name="subscription_update_fallback">更新失败，已使用上次保存的配置</string>
+    <string name="live_playback_settings">播放设置</string>
+    <string name="live_previous_line">上一条线路</string>
+    <string name="live_next_line">下一条线路</string>
+    <string name="live_single_line">单线路</string>
+    <string name="live_line_count">线路 %1$d / %2$d</string>
+    <string name="live_playback_retry">播放失败 · 点击重试</string>
 </resources>

@@ -1,36 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/root"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:padding="10dp"
-    android:focusable="true"
-    android:focusableInTouchMode="false"
-    android:orientation="horizontal"
-    android:gravity="center"
-    >
-
-    <TextView
-        android:id="@+id/tvChannelNum"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:ellipsize="marquee"
-        android:gravity="center"
-        android:marqueeRepeatLimit="marquee_forever"
-        android:singleLine="true"
-        android:textColor="@color/text_foreground"
-        tools:text="10"/>
-
-    <TextView
-        android:id="@+id/tvChannelName"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:ellipsize="marquee"
-        android:marqueeRepeatLimit="marquee_forever"
-        android:singleLine="true"
-        android:layout_marginStart="6dp"
-        android:textColor="@color/text_foreground"
-        android:layout_marginLeft="14dp"
-        tools:text="CCTV1"/>
-</LinearLayout>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto" android:id="@+id/root"
+    android:layout_width="match_parent" android:layout_height="64dp" android:paddingHorizontal="8dp" android:focusable="true">
+    <TextView android:id="@+id/tvChannelNum" android:layout_width="0dp" android:layout_height="wrap_content" android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent" app:layout_constraintStart_toStartOf="parent" />
+    <TextView android:id="@+id/tvChannelName" android:layout_width="0dp" android:layout_height="wrap_content" android:maxLines="1" android:ellipsize="end"
+        android:textColor="@color/text_foreground" android:textSize="14sp" app:layout_constraintTop_toTopOf="parent" android:layout_marginTop="10dp"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toStartOf="@id/live_favorite" />
+    <TextView android:id="@+id/live_channel_detail" android:layout_width="0dp" android:layout_height="wrap_content" android:maxLines="1" android:ellipsize="end"
+        android:textColor="@color/text_sub_foreground" android:textSize="11sp" app:layout_constraintTop_toBottomOf="@id/tvChannelName"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toStartOf="@id/live_favorite" />
+    <TextView android:id="@+id/live_favorite" android:layout_width="52dp" android:layout_height="48dp" android:gravity="center" android:text="收藏"
+        android:textSize="12sp" android:textColor="@color/colorPrimary" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintEnd_toEndOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>

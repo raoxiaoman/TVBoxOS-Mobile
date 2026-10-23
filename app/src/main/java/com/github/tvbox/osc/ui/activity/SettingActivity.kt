@@ -21,6 +21,7 @@ import com.github.tvbox.osc.ui.dialog.SelectDialog
 import com.github.tvbox.osc.ui.dialog.WallpaperDialog
 import com.github.tvbox.osc.util.FastClickCheckUtil
 import com.github.tvbox.osc.util.FileUtils
+import com.github.tvbox.osc.util.live.LiveStore
 import com.github.tvbox.osc.util.HawkConfig
 import com.github.tvbox.osc.util.HistoryHelper
 import com.github.tvbox.osc.util.OkGoHelper
@@ -510,6 +511,9 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
                 if (flags != 0) contentResolver.takePersistableUriPermission(uri, flags)
             } catch (_: SecurityException) {
             }
+            val store = LiveStore.get()
+            store.select(store.upsert("本地直播", uri.toString()).id)
+            store.save()
             Hawk.put(HawkConfig.LIVE_URL, uri.toString())
             mBinding.tvLiveApi.text = "本地文件"
             ToastUtils.showShort("直播源已导入")

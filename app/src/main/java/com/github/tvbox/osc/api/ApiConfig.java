@@ -49,6 +49,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -523,7 +524,8 @@ public class ApiConfig {
         }
         // 直播源
         liveChannelGroupList.clear();           //修复从后台切换重复加载频道列表
-        String liveURL = Hawk.get(HawkConfig.LIVE_URL, "");
+        followingLiveGroupsJson = "[]";
+        String liveURL = "";
         //String epgURL  = Hawk.get(HawkConfig.EPG_URL, "");
 
         String liveURL_final = null;
@@ -654,6 +656,15 @@ public class ApiConfig {
                 liveChannelGroup.setGroupName(liveURL_final);
                 liveChannelGroupList.add(liveChannelGroup);
             }
+            followingLiveGroupsJson = new Gson().toJson(liveChannelGroupList);
+            String overrideUrl = Hawk.get(HawkConfig.LIVE_URL, "");
+            if (!overrideUrl.isEmpty()) {
+                liveChannelGroupList.clear();
+                LiveChannelGroup overrideGroup = new LiveChannelGroup();
+                overrideGroup.setGroupName("http://127.0.0.1:9978/proxy?do=live&type=txt&ext="
+                        + Base64.encodeToString(overrideUrl.getBytes("UTF-8"), Base64.URL_SAFE | Base64.NO_WRAP));
+                liveChannelGroupList.add(overrideGroup);
+            }
 
         } catch (Throwable th) {
             th.printStackTrace();
@@ -782,15 +793,29 @@ public class ApiConfig {
         }
     }
 
-    public void loadLives(JsonArray livesArray) {
+    private String followingLiveGroupsJson = "[]";
+
+    public List<LiveChannelGroup> getFollowingLiveGroups() {
+        LiveChannelGroup[] groups = new Gson().fromJson(followingLiveGroupsJson, LiveChannelGroup[].class);
+        return new ArrayList<>(Arrays.asList(groups));
+    }
+
+    public void replaceLiveGroups(List<LiveChannelGroup> groups) {
         liveChannelGroupList.clear();
-        int groupIndex = 0;
-        int channelIndex = 0;
+        liveChannelGroupList.addAll(groups);
+    }
+
+    public void loadLives(JsonArray livesArray) {
+        replaceLiveGroups(parseLiveGroups(livesArray));
+    }
+
+    public static List<LiveChannelGroup> parseLiveGroups(JsonArray livesArray) {
+        List<LiveChannelGroup> groups = new ArrayList<>();
         int channelNum = 0;
         for (JsonElement groupElement : livesArray) {
             LiveChannelGroup liveChannelGroup = new LiveChannelGroup();
             liveChannelGroup.setLiveChannels(new ArrayList<LiveChannelItem>());
-            liveChannelGroup.setGroupIndex(groupIndex++);
+            liveChannelGroup.setGroupIndex(groups.size());
             String groupName = ((JsonObject) groupElement).get("group").getAsString().trim();
             String[] splitGroupName = groupName.split("_", 2);
             liveChannelGroup.setGroupName(splitGroupName[0]);
@@ -798,32 +823,40 @@ public class ApiConfig {
                 liveChannelGroup.setGroupPassword(splitGroupName[1]);
             else
                 liveChannelGroup.setGroupPassword("");
-            channelIndex = 0;
             for (JsonElement channelElement : ((JsonObject) groupElement).get("channels").getAsJsonArray()) {
                 JsonObject obj = (JsonObject) channelElement;
                 LiveChannelItem liveChannelItem = new LiveChannelItem();
                 liveChannelItem.setChannelName(obj.get("name").getAsString().trim());
-                liveChannelItem.setChannelIndex(channelIndex++);
-                liveChannelItem.setChannelNum(++channelNum);
                 ArrayList<String> urls = DefaultConfig.safeJsonStringList(obj, "urls");
                 ArrayList<String> sourceNames = new ArrayList<>();
                 ArrayList<String> sourceUrls = new ArrayList<>();
                 int sourceIndex = 1;
                 for (String url : urls) {
                     String[] splitText = url.split("\\$", 2);
-                    sourceUrls.add(splitText[0]);
+                    if (splitText[0].trim().isEmpty()) {
+                        continue;
+                    }
+                    sourceUrls.add(splitText[0].trim());
                     if (splitText.length > 1)
                         sourceNames.add(splitText[1]);
                     else
                         sourceNames.add("源" + Integer.toString(sourceIndex));
                     sourceIndex++;
                 }
+                if (sourceUrls.isEmpty() || liveChannelItem.getChannelName().isEmpty()) {
+                    continue;
+                }
+                liveChannelItem.setChannelIndex(liveChannelGroup.getLiveChannels().size());
+                liveChannelItem.setChannelNum(++channelNum);
                 liveChannelItem.setChannelSourceNames(sourceNames);
                 liveChannelItem.setChannelUrls(sourceUrls);
                 liveChannelGroup.getLiveChannels().add(liveChannelItem);
             }
-            liveChannelGroupList.add(liveChannelGroup);
+            if (!liveChannelGroup.getLiveChannels().isEmpty()) {
+                groups.add(liveChannelGroup);
+            }
         }
+        return groups;
     }
 
     public String getSpider() {

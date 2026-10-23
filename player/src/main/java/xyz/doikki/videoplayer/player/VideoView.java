@@ -244,7 +244,24 @@ public class VideoView<P extends AbstractPlayer> extends FrameLayout
      */
     protected void initPlayer() {
         mMediaPlayer = mPlayerFactory.createPlayer(getContext());
-        mMediaPlayer.setPlayerEventListener(this);
+        AbstractPlayer player = mMediaPlayer;
+        player.setPlayerEventListener(new AbstractPlayer.PlayerEventListener() {
+            @Override public void onError() {
+                if (mMediaPlayer == player) { VideoView.this.onError(); }
+            }
+            @Override public void onCompletion() {
+                if (mMediaPlayer == player) { VideoView.this.onCompletion(); }
+            }
+            @Override public void onInfo(int what, int extra) {
+                if (mMediaPlayer == player) { VideoView.this.onInfo(what, extra); }
+            }
+            @Override public void onPrepared() {
+                if (mMediaPlayer == player) { VideoView.this.onPrepared(); }
+            }
+            @Override public void onVideoSizeChanged(int width, int height) {
+                if (mMediaPlayer == player) { VideoView.this.onVideoSizeChanged(width, height); }
+            }
+        });
         setInitOptions();
         mMediaPlayer.initPlayer();
         setOptions();
@@ -364,8 +381,9 @@ public class VideoView<P extends AbstractPlayer> extends FrameLayout
         if (!isInIdleState()) {
             //释放播放器
             if (mMediaPlayer != null) {
-                mMediaPlayer.release();
+                AbstractPlayer player = mMediaPlayer;
                 mMediaPlayer = null;
+                player.release();
             }
             //释放renderView
             if (mRenderView != null) {

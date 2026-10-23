@@ -1,21 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<androidx.constraintlayout.widget.ConstraintLayout
 	xmlns:tools="http://schemas.android.com/tools"
 	android:id="@+id/live_root"
 	xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-	android:orientation="vertical">
+	android:focusableInTouchMode="true">
 
-    <RelativeLayout
-		android:layout_width="match_parent"
-		android:layout_height="240dp">
+    <FrameLayout
+        android:id="@+id/live_video_panel"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="16:9"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
 		<xyz.doikki.videoplayer.player.VideoView
 			android:id="@+id/mVideoView"
 			android:layout_width="match_parent"
-			android:layout_height="300dp" />
+			android:layout_height="match_parent" />
 
 		<LinearLayout
 			android:id="@+id/tvRightSettingLayout"
@@ -60,124 +65,121 @@
 				app:tv_verticalSpacingWithMargins="10dp" />
 		</LinearLayout>
 
-	</RelativeLayout>
+	</FrameLayout>
 
-	<!--频道序号显示-->
-	<RelativeLayout
-		android:gravity="center_vertical"
-		android:id="@+id/ll_epg"
-		android:layout_width="match_parent"
-		android:layout_height="100dp"
-		android:background="@drawable/bg_large_round_gray"
-		android:layout_margin="10dp">
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/ll_epg"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="8dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:background="@drawable/bg_large_round_gray"
+        app:layout_constraintTop_toBottomOf="@id/live_video_panel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
-		<LinearLayout
-			android:id="@+id/channelinfo"
-			android:layout_width="140dp"
-			android:layout_height="match_parent"
-			android:layout_marginStart="@dimen/dp_5"
-			android:layout_marginLeft="@dimen/dp_5"
-			android:layout_marginEnd="@dimen/dp_5"
-			android:layout_marginRight="@dimen/dp_5"
-			android:gravity="center"
-			android:orientation="vertical">
-			<com.github.tvbox.osc.ui.tv.widget.MarqueeTextView
-				android:id="@+id/tv_channel_bar_name"
-				android:layout_width="wrap_content"
-				android:layout_height="wrap_content"
-				android:ellipsize="marquee"
-				android:gravity="center"
-				android:paddingTop="0dp"
-				android:singleLine="true"
-				android:text="中央 HD"
-				android:textStyle="bold"
-				android:textSize="16sp" />
+        <TextView
+            android:id="@+id/tv_channel_bar_name"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginEnd="8dp"
+            android:gravity="center_vertical"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:textColor="@color/text_foreground"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            tools:text="Arena Sport 1 Premium (Serbia)"
+            app:layout_constraintTop_toTopOf="@id/ic_setting"
+            app:layout_constraintBottom_toBottomOf="@id/ic_setting"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/ic_setting" />
 
-			<TextView
-				android:id="@+id/tv_channel_bottom_number"
-				android:layout_width="wrap_content"
-				android:layout_height="wrap_content"
-				android:layout_gravity="center"
-				android:ellipsize="marquee"
-				android:gravity="center"
-				android:marqueeRepeatLimit="marquee_forever"
-				android:singleLine="true"
-				tools:text="10"
-				android:visibility="gone"
-				tools:visibility="visible"
-				android:textSize="16sp"
-				android:textStyle="bold"
-				android:layout_marginTop="6dp"/>
+        <ImageView
+            android:id="@+id/ic_setting"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:src="@drawable/ic_settings"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/live_playback_settings"
+            app:tint="@color/text_foreground"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
-		</LinearLayout>
+        <TextView
+            android:id="@+id/tv_source"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="32dp"
+            android:gravity="center_vertical"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textSize="13sp"
+            android:textColor="@color/text_sub_foreground"
+            tools:text="线路 2 / 4"
+            app:layout_constraintTop_toBottomOf="@id/ic_setting"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/ic_pre_source" />
 
-		<LinearLayout
-			android:layout_width="wrap_content"
-			android:layout_height="wrap_content"
-			android:layout_marginRight="20dp"
-			android:layout_marginBottom="10dp"
-			android:layout_alignParentRight="true"
-			android:gravity="center"
-			android:layout_alignParentBottom="true">
+        <ImageView
+            android:id="@+id/ic_pre_source"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:rotation="180"
+            android:src="@drawable/icon_pre"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/live_previous_line"
+            app:tint="@color/text_foreground"
+            app:layout_constraintTop_toBottomOf="@id/ic_setting"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/ic_next_source" />
 
-			<ImageView
-				android:id="@+id/ic_pre_source"
-				android:layout_width="30dp"
-				android:layout_height="30dp"
-				android:src="@drawable/icon_pre"
-				app:tint="@color/text_foreground"
-				android:rotation="-180"
-				android:padding="4dp"
-				/>
-			<TextView
-				android:id="@+id/tv_source"
-				android:layout_width="wrap_content"
-				android:layout_height="wrap_content"
-				android:text="源 1/1"
-				android:layout_marginHorizontal="14dp"
-				android:textSize="16sp"
-				android:textColor="@color/text_foreground"
-				/>
-			<ImageView
-				android:id="@+id/ic_next_source"
-				android:layout_width="30dp"
-				android:layout_height="30dp"
-				android:src="@drawable/icon_pre"
-				app:tint="@color/text_foreground"
-				android:padding="4dp"
-				/>
-		</LinearLayout>
+        <ImageView
+            android:id="@+id/ic_next_source"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:src="@drawable/icon_pre"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/live_next_line"
+            app:tint="@color/text_foreground"
+            app:layout_constraintTop_toBottomOf="@id/ic_setting"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
-		<ImageView
-			android:id="@+id/ic_cast"
-			android:layout_width="34dp"
-			android:layout_height="34dp"
-			android:src="@drawable/ic_cast"
-			app:tint="@color/text_foreground"
-			android:padding="4dp"
-			android:layout_marginTop="10dp"
-			android:layout_toLeftOf="@+id/ic_setting"
-			android:layout_marginRight="14dp"
-			/>
-		<ImageView
-			android:id="@+id/ic_setting"
-			android:layout_width="34dp"
-			android:layout_height="34dp"
-			android:src="@drawable/ic_player_setting"
-			app:tint="@color/text_foreground"
-			android:padding="4dp"
-			android:layout_alignParentEnd="true"
-			android:layout_marginRight="30dp"
-			android:layout_marginTop="10dp"
-			/>
+        <ImageView
+            android:id="@+id/ic_cast"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/ic_setting" />
 
-	</RelativeLayout>
+        <TextView
+            android:id="@+id/tv_channel_bottom_number"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+	<include android:id="@+id/live_browser" layout="@layout/include_live_browser"
+        android:layout_width="0dp" android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@id/ll_epg" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" />
 
 	<LinearLayout
 		android:id="@+id/tvLeftChannnelListLayout"
+        app:layout_constraintTop_toBottomOf="@id/live_browser"
+        app:layout_constraintBottom_toTopOf="@id/bottom_nav"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent"
 		android:layout_width="match_parent"
 		android:layout_height="0dp"
-		android:layout_weight="1"
 		android:layout_gravity="center_horizontal"
 		android:layout_margin="0dp"
 		android:baselineAligned="false"
@@ -195,15 +197,14 @@
 
 			<androidx.recyclerview.widget.RecyclerView
 				android:id="@+id/mGroupGridView"
-				android:layout_width="0dp"
-				android:layout_weight="1"
+				android:layout_width="100dp"
 				android:layout_height="wrap_content"
 				android:fadeScrollbars="false"
 				android:listSelector="@drawable/item_bg_selector_left"
 				android:paddingHorizontal="10dp"
 				android:scrollbars="none"
 				android:layout_gravity="center"
-				android:layout_marginLeft="40dp"
+				android:layout_marginLeft="0dp"
 				tools:listitem="@layout/item_live_channel_group_new"/>
 
 			<androidx.recyclerview.widget.RecyclerView
@@ -215,8 +216,8 @@
 				android:focusable="true"
 				android:listSelector="@drawable/item_bg_selector_right"
 				android:scrollbars="none"
-				android:layout_marginLeft="30dp"
-				android:layout_marginRight="40dp"
+				android:layout_marginLeft="0dp"
+				android:layout_marginRight="0dp"
 				tools:listitem="@layout/item_live_channel_new"
 				/>
 		</LinearLayout>
@@ -225,6 +226,7 @@
 
 	    <TextView
 	        android:id="@+id/tvChannel"
+        app:layout_constraintTop_toTopOf="parent" app:layout_constraintEnd_toEndOf="parent"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="right"
@@ -240,6 +242,9 @@
 
 	<include
 		android:id="@+id/bottom_nav"
+        android:layout_width="0dp" android:layout_height="60dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent"
 		layout="@layout/include_bottom_navigation" />
 
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
