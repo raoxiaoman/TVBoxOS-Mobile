@@ -18,7 +18,7 @@
             android:layout_gravity="bottom"
             android:layout_marginLeft="20dp"
             android:layout_marginBottom="4dp"
-            android:text="@string/app_name"
+            android:text="@string/tvbox_app_name"
             android:textColor="@color/black"
             android:textSize="22sp" />
     </LinearLayout>
