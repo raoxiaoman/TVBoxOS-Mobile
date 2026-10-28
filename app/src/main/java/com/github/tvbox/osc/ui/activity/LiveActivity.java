@@ -1362,36 +1362,113 @@ public class LiveActivity extends BaseActivity {
 
     private void showLiveSubscriptions() {
         List<LiveStore.Subscription> subscriptions = liveStore.subscriptions();
-        String[] names = new String[subscriptions.size()];
-        for (int i = 0; i < names.length; i++) {
-            LiveStore.Subscription subscription = subscriptions.get(i);
-            names[i] = subscription.name + (subscription.id.equals(liveStore.current().id) ? "（当前）" : "");
+        List<String> entries = new ArrayList<>();
+        for (LiveStore.Subscription subscription : subscriptions) {
+            entries.add(subscription.name + (subscription.id.equals(liveStore.current().id) ? "（当前）" : ""));
         }
+        final int subscriptionCount = entries.size();
+        entries.add("———— 管理 ————");
+        entries.add("添加直播地址");
+        entries.add("本地导入文件");
+        entries.add("重命名当前订阅");
+        entries.add("删除订阅");
         new AlertDialog.Builder(this).setTitle("直播订阅")
-                .setItems(names, (dialog, which) -> loadLiveSubscription(subscriptions.get(which)))
-                .setPositiveButton("添加地址", (dialog, which) -> addLiveSubscription())
-                .setNeutralButton("本地导入", (dialog, which) -> {
-                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                    intent.setType("*/*");
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                    startActivityForResult(intent, IMPORT_LIVE);
-                })
-                .setNegativeButton("重命名当前", (dialog, which) -> {
-                    if (liveStore.current().url.isEmpty()) {
-                        ToastUtils.showShort("跟随点播订阅无需重命名");
+                .setItems(entries.toArray(new String[0]), (dialog, which) -> {
+                    if (which < subscriptionCount) {
+                        loadLiveSubscription(subscriptions.get(which));
                         return;
                     }
-                    EditText name = new EditText(this);
-                    name.setSingleLine(true);
-                    name.setText(liveStore.current().name);
-                    new AlertDialog.Builder(this).setTitle("订阅名称").setView(name)
-                            .setPositiveButton("保存", (renameDialog, index) -> {
-                                liveStore.rename(liveStore.current().id, name.getText().toString());
-                                liveStore.save();
-                                updateBrowserBars();
-                            }).setNegativeButton("取消", null).show();
+                    switch (which - subscriptionCount) {
+                        case 1:
+                            addLiveSubscription();
+                            break;
+                        case 2:
+                            importLiveSubscription();
+                            break;
+                        case 3:
+                            renameCurrentSubscription();
+                            break;
+                        case 4:
+                            showDeleteSubscriptions();
+                            break;
+                        default:
+                            break;
+                    }
                 }).show();
+    }
+
+    private void importLiveSubscription() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("*/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent, IMPORT_LIVE);
+    }
+
+    private void renameCurrentSubscription() {
+        if (liveStore.current().url.isEmpty()) {
+            ToastUtils.showShort("跟随点播订阅无需重命名");
+            return;
+        }
+        EditText name = new EditText(this);
+        name.setSingleLine(true);
+        name.setText(liveStore.current().name);
+        new AlertDialog.Builder(this).setTitle("订阅名称").setView(name)
+                .setPositiveButton("保存", (renameDialog, index) -> {
+                    liveStore.rename(liveStore.current().id, name.getText().toString());
+                    liveStore.save();
+                    updateBrowserBars();
+                }).setNegativeButton("取消", null).show();
+    }
+
+    private void showDeleteSubscriptions() {
+        List<LiveStore.Subscription> removable = new ArrayList<>();
+        for (LiveStore.Subscription subscription : liveStore.subscriptions()) {
+            if (!"follow".equals(subscription.id)) {
+                removable.add(subscription);
+            }
+        }
+        if (removable.isEmpty()) {
+            ToastUtils.showShort("没有可删除的直播订阅");
+            return;
+        }
+        String[] names = new String[removable.size()];
+        boolean[] checked = new boolean[removable.size()];
+        for (int i = 0; i < names.length; i++) {
+            names[i] = removable.get(i).name
+                    + (removable.get(i).id.equals(liveStore.current().id) ? "（当前）" : "");
+        }
+        new AlertDialog.Builder(this).setTitle("勾选要删除的订阅")
+                .setMultiChoiceItems(names, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setPositiveButton("删除", (dialog, which) -> {
+                    boolean removedCurrent = false;
+                    int count = 0;
+                    // 倒序删除，避免索引在移除过程中错位
+                    for (int i = removable.size() - 1; i >= 0; i--) {
+                        if (!checked[i]) {
+                            continue;
+                        }
+                        LiveStore.Subscription subscription = removable.get(i);
+                        if (subscription.id.equals(liveStore.current().id)) {
+                            removedCurrent = true;
+                        }
+                        if (liveStore.remove(subscription.id)) {
+                            count++;
+                        }
+                    }
+                    if (count == 0) {
+                        ToastUtils.showShort("未选择订阅");
+                        return;
+                    }
+                    liveStore.save();
+                    ToastUtils.showShort("已删除 " + count + " 个订阅");
+                    if (removedCurrent) {
+                        Hawk.put(HawkConfig.LIVE_URL, "");
+                        loadLiveSubscription(liveStore.current());
+                    } else {
+                        updateBrowserBars();
+                    }
+                }).setNegativeButton("取消", null).show();
     }
 
     private void addLiveSubscription() {

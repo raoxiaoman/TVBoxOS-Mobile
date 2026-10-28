@@ -98,6 +98,30 @@ public final class LiveStore {
         return subscription;
     }
 
+    public boolean remove(String id) {
+        if ("follow".equals(id)) {
+            return false;
+        }
+        Subscription target = null;
+        for (Subscription subscription : state.subscriptions) {
+            if (subscription.id.equals(id)) {
+                target = subscription;
+                break;
+            }
+        }
+        if (target == null) {
+            return false;
+        }
+        state.subscriptions.remove(target);
+        // 订阅删除后其收藏与播放记录一并清理，避免残留脏数据
+        state.favorites.entrySet().removeIf(entry -> entry.getKey().contains(id));
+        state.recent.entrySet().removeIf(entry -> entry.getKey().contains(id));
+        if (state.selected.equals(id)) {
+            state.selected = "follow";
+        }
+        return true;
+    }
+
     public void rename(String id, String name) {
         if (name.trim().isEmpty()) {
             return;
