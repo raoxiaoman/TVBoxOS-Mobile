@@ -62,6 +62,7 @@ import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.live.TxtSubscribe;
 import com.github.tvbox.osc.util.live.LiveStore;
+import com.github.tvbox.osc.util.live.LiveSubscriptionUi;
 import com.github.tvbox.osc.util.live.LiveCatalog;
 import com.github.tvbox.osc.util.live.LiveRetry;
 import com.google.gson.JsonArray;
@@ -1406,69 +1407,18 @@ public class LiveActivity extends BaseActivity {
     }
 
     private void renameCurrentSubscription() {
-        if (liveStore.current().url.isEmpty()) {
-            ToastUtils.showShort("跟随点播订阅无需重命名");
-            return;
-        }
-        EditText name = new EditText(this);
-        name.setSingleLine(true);
-        name.setText(liveStore.current().name);
-        new AlertDialog.Builder(this).setTitle("订阅名称").setView(name)
-                .setPositiveButton("保存", (renameDialog, index) -> {
-                    liveStore.rename(liveStore.current().id, name.getText().toString());
-                    liveStore.save();
-                    updateBrowserBars();
-                }).setNegativeButton("取消", null).show();
+        LiveSubscriptionUi.showRenameDialog(this, liveStore, changed -> updateBrowserBars());
     }
 
     private void showDeleteSubscriptions() {
-        List<LiveStore.Subscription> removable = new ArrayList<>();
-        for (LiveStore.Subscription subscription : liveStore.subscriptions()) {
-            if (!"follow".equals(subscription.id)) {
-                removable.add(subscription);
+        LiveSubscriptionUi.showDeleteDialog(this, liveStore, removedCurrent -> {
+            if (removedCurrent) {
+                Hawk.put(HawkConfig.LIVE_URL, "");
+                loadLiveSubscription(liveStore.current());
+            } else {
+                updateBrowserBars();
             }
-        }
-        if (removable.isEmpty()) {
-            ToastUtils.showShort("没有可删除的直播订阅");
-            return;
-        }
-        String[] names = new String[removable.size()];
-        boolean[] checked = new boolean[removable.size()];
-        for (int i = 0; i < names.length; i++) {
-            names[i] = removable.get(i).name
-                    + (removable.get(i).id.equals(liveStore.current().id) ? "（当前）" : "");
-        }
-        new AlertDialog.Builder(this).setTitle("勾选要删除的订阅")
-                .setMultiChoiceItems(names, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
-                .setPositiveButton("删除", (dialog, which) -> {
-                    boolean removedCurrent = false;
-                    int count = 0;
-                    // 倒序删除，避免索引在移除过程中错位
-                    for (int i = removable.size() - 1; i >= 0; i--) {
-                        if (!checked[i]) {
-                            continue;
-                        }
-                        LiveStore.Subscription subscription = removable.get(i);
-                        if (subscription.id.equals(liveStore.current().id)) {
-                            removedCurrent = true;
-                        }
-                        if (liveStore.remove(subscription.id)) {
-                            count++;
-                        }
-                    }
-                    if (count == 0) {
-                        ToastUtils.showShort("未选择订阅");
-                        return;
-                    }
-                    liveStore.save();
-                    ToastUtils.showShort("已删除 " + count + " 个订阅");
-                    if (removedCurrent) {
-                        Hawk.put(HawkConfig.LIVE_URL, "");
-                        loadLiveSubscription(liveStore.current());
-                    } else {
-                        updateBrowserBars();
-                    }
-                }).setNegativeButton("取消", null).show();
+        });
     }
 
     private void addLiveSubscription() {

@@ -86,9 +86,13 @@ class SettingActivity : BaseVbActivity<ActivitySettingBinding>() {
         }
 
         mBinding.llLiveApi.setOnClickListener {
+            val dialog = LiveApiDialog(this) { pickLiveSource() }
+            dialog.setOnSelectedListener { url ->
+                mBinding.tvLiveApi.text = shortSourceName(url, "跟随订阅")
+            }
             XPopup.Builder(mContext)
                 .autoFocusEditText(false)
-                .asCustom(LiveApiDialog(this) { pickLiveSource() })
+                .asCustom(dialog)
                 .show()
         }
 
