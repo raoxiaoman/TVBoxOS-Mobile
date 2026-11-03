@@ -462,12 +462,29 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
         return textView
     }
 
+    // 网盘/聚合搜索类源（夸搜、盘Se、米盘、123盘、光鸭、阿里盘搜等）画质高，优先展示
+    private fun isPanSource(source: SourceBean): Boolean {
+        val api = source.api ?: return false
+        if (api.contains("PanSearch") || api.contains("MIPanSo") || api.contains("PanWebShare")
+            || api.contains("csp_AliPS") || api.contains("csp_Market")
+        ) return true
+        val name = source.name ?: return false
+        val panKeywords = listOf(
+            "夸搜", "盘Se", "米盘", "123┆4K", "光鸭", "阿里盘搜",
+            "网盘", "Alist", "夸克", "盘搜", "夸父", "优汐", "UC盘"
+        )
+        return panKeywords.any { name.contains(it) }
+    }
+
     private fun sourcePriority(source: SourceBean, homeKey: String): Int {
         if (homeKey.isNotEmpty() && source.key == homeKey) {
             return 0
         }
+        if (isPanSource(source)) {
+            return 1
+        }
         return when (source.type) {
-            0, 1, 4 -> 1
+            0, 1, 4 -> 2
             3 -> if (ApiConfig.get().isCspRuntimeReady(source)) 2 else 3
             else -> 3
         }
@@ -535,6 +552,11 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
      * @param key
      * @return
      */
+    private fun tabPriority(key: String): Int {
+        val bean = ApiConfig.get().getSource(key) ?: return 9
+        return sourcePriority(bean, ApiConfig.get().homeSourceBean?.key.orEmpty())
+    }
+
     private fun addWordAdapterIfNeed(key: String): String {
         try {
             var name = ""
@@ -550,7 +572,18 @@ class FastSearchActivity : BaseVbActivity<ActivityFastSearchBinding>(), TextWatc
                     return key
                 }
             }
-            mBinding.tabLayout.addView(getSiteTextView(name))
+            // 按源优先级插入：网盘源结果返回慢，不能简单 append，否则总排在后面
+            val newPriority = tabPriority(key)
+            var insertIdx = mBinding.tabLayout.childCount
+            for (i in 1 until mBinding.tabLayout.childCount) {
+                val item = mBinding.tabLayout.getChildAt(i) as TextView
+                val existingKey = spNames[item.text.toString()] ?: continue
+                if (tabPriority(existingKey) > newPriority) {
+                    insertIdx = i
+                    break
+                }
+            }
+            mBinding.tabLayout.addView(getSiteTextView(name), insertIdx)
             return key
         } catch (e: Exception) {
             return key
